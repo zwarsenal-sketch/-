@@ -1,0 +1,6 @@
+{
+  "name": "造车库存经营决策系统",
+  "description": "立项汇报与沙盘决策系统：面向车企管理层，打通销量、订单、生产计划和BOM，实现整车与零部件的精细化库存经营与风险阈值预警。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
