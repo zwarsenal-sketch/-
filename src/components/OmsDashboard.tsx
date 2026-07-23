@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Search, 
   Filter, 
@@ -268,8 +268,18 @@ const generateExpandedMockData = (): OmsVehicleItem[] => {
   return result.sort((a, b) => b.offlineDays - a.offlineDays);
 };
 
-export default function OmsDashboard() {
-  const [currentTab, setCurrentTab] = useState<'oms61' | 'oms62' | 'oms63'>('oms61');
+export interface OmsDashboardProps {
+  key?: React.Key;
+  initialTab?: 'oms61' | 'oms62' | 'oms63';
+  hideTabHeader?: boolean;
+}
+
+export default function OmsDashboard({ initialTab = 'oms61', hideTabHeader = false }: OmsDashboardProps) {
+  const [currentTab, setCurrentTab] = useState<'oms61' | 'oms62' | 'oms63'>(initialTab);
+
+  useEffect(() => {
+    setCurrentTab(initialTab);
+  }, [initialTab]);
   const [oms61SubTab, setOms61SubTab] = useState<'analysis' | 'visual' | 'table'>('analysis');
   const [filterRegion, setFilterRegion] = useState<string>('all');
   const [filterArea, setFilterArea] = useState<string>('all');
@@ -631,212 +641,175 @@ export default function OmsDashboard() {
   return (
     <div className="space-y-6 animate-fade-in">
       
-      {/* Dynamic Header & Background Benefit Pitch */}
-      <div className="bg-gradient-to-r from-indigo-900 via-slate-900 to-indigo-950 text-white rounded-2xl p-6 md:p-8 shadow-xl relative overflow-hidden border border-indigo-800/40">
-        <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl -mr-12 -mt-12"></div>
-        <div className="absolute bottom-0 left-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl -ml-16 -mb-16"></div>
-        
-        <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 text-xs font-semibold">
-              <Layers className="w-3.5 h-3.5" />
-              全新上线 · 数字化整车OMS决策
-            </div>
-            <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-white">
-              多拉卖车库存 OMS 数据看板
-            </h1>
-            <p className="text-sm text-slate-300 max-w-2xl">
-              针对传统人工每日手动导出迟滞痛点，打通全国门店、大区、物流和销售绑定明细，实现对超期库存车辆的精准预警，合理协调采销排产与区域调拨。
-            </p>
-          </div>
-          
-          {/* Quantitative ROI display */}
-          <div className="bg-slate-800/80 backdrop-blur border border-slate-700/50 rounded-xl p-4 flex items-center gap-4 shadow-lg shrink-0">
-            <div className="p-3 bg-emerald-500/10 rounded-lg text-emerald-400">
-              <TrendingUp className="w-6 h-6" />
-            </div>
-            <div>
-              <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">
-                全国 50+ 门店定量效率收益
-              </div>
-              <div className="text-xl font-black text-emerald-400 font-mono">
-                节省 1,100 小时 / 月
-              </div>
-              <div className="text-[11px] text-slate-300">
-                单店每月省去手工处理 <span className="font-bold text-white">22 小时</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* FILTER CONTROL PANEL */}
-      <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-          <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-slate-600" />
-            <h3 className="font-bold text-slate-800 text-sm">OMS 库存多维筛选与控制</h3>
-          </div>
-          <div className="text-xs text-slate-400 flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
-            当前状态：数据已自动同步
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
-          {/* Date Picker */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-500 flex items-center gap-1">
-              <Calendar className="w-3 h-3" /> 当前日期
-            </label>
-            <input 
-              type="date" 
-              value={currentDate}
-              onChange={(e) => setCurrentDate(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 text-slate-800 rounded-lg py-2 px-3 text-xs font-medium focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
-            />
-          </div>
-
-          {/* Region selector */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-500 flex items-center gap-1">
-              <Building className="w-3 h-3" /> 请选择大区
-            </label>
-            <select
-              value={filterRegion}
-              onChange={(e) => {
-                setFilterRegion(e.target.value);
-                setFilterArea('all');
-                setFilterCity('all');
-              }}
-              className="w-full bg-slate-50 border border-slate-200 text-slate-800 rounded-lg py-2 px-3 text-xs font-medium focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
-            >
-              <option value="all">全部大区 (全国)</option>
-              {uniqueRegions.map(r => (
-                <option key={r} value={r}>{r}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Area selector */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-500 flex items-center gap-1">
-              <MapPin className="w-3 h-3" /> 请选择区域
-            </label>
-            <select
-              value={filterArea}
-              onChange={(e) => {
-                setFilterArea(e.target.value);
-                setFilterCity('all');
-              }}
-              className="w-full bg-slate-50 border border-slate-200 text-slate-800 rounded-lg py-2 px-3 text-xs font-medium focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
-            >
-              <option value="all">全部区域</option>
-              {uniqueAreas.map(a => (
-                <option key={a} value={a}>{a}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* City selector */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-500 flex items-center gap-1">
-              <MapPin className="w-3 h-3" /> 请选择城市
-            </label>
-            <select
-              value={filterCity}
-              onChange={(e) => setFilterCity(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 text-slate-800 rounded-lg py-2 px-3 text-xs font-medium focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
-            >
-              <option value="all">全部城市</option>
-              {uniqueCities.map(c => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Search/VIN filter */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-500 flex items-center gap-1">
-              <Search className="w-3 h-3" /> 车架号 (VIN)
-            </label>
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="搜索车架号后6位"
-                value={searchVin}
-                onChange={(e) => setSearchVin(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 text-slate-800 rounded-lg py-2 pl-8 pr-3 text-xs font-medium focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none placeholder-slate-400"
-              />
-              <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-slate-400" />
-            </div>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap justify-between items-center gap-3 pt-2 border-t border-slate-100">
-          <div className="text-xs text-slate-500">
-            已筛选出 <span className="font-bold text-slate-800">{filteredVehicles.length}</span> 条明细，对应加权整车大盘预估：
-            <span className="font-bold text-indigo-600 font-mono text-sm ml-1">{totalStockCount} 辆</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleResetFilters}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              重置
-            </button>
-            <button
-              onClick={() => { setCurrentTab('oms61'); setOms61SubTab('table'); }}
-              className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors shadow-sm"
-            >
-              <Search className="w-3.5 h-3.5" />
-              查询明细
-            </button>
-          </div>
-        </div>
-      </div>
-
       {/* DASHBOARD TAB SELECTOR (6.1, 6.2, 6.3) */}
-      <div className="flex border-b border-slate-200 bg-white rounded-t-xl px-4 pt-1 gap-2">
-        <button
-          onClick={() => setCurrentTab('oms61')}
-          className={`px-5 py-3.5 text-sm font-bold border-b-2 transition-all duration-200 flex items-center gap-2 ${
-            currentTab === 'oms61'
-              ? 'border-indigo-600 text-indigo-600'
-              : 'border-transparent text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          <Layers className="w-4 h-4 text-indigo-600" />
-          <span>6.1 整车库存看板</span>
-        </button>
-        <button
-          onClick={() => setCurrentTab('oms62')}
-          className={`px-5 py-3.5 text-sm font-bold border-b-2 transition-all duration-200 flex items-center gap-2 ${
-            currentTab === 'oms62'
-              ? 'border-indigo-600 text-indigo-600'
-              : 'border-transparent text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          <SlidersHorizontal className="w-4 h-4 text-emerald-500" />
-          <span>6.2 零部件库存看板</span>
-        </button>
-        <button
-          onClick={() => setCurrentTab('oms63')}
-          className={`px-5 py-3.5 text-sm font-bold border-b-2 transition-all duration-200 flex items-center gap-2 ${
-            currentTab === 'oms63'
-              ? 'border-indigo-600 text-indigo-600'
-              : 'border-transparent text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          <AlertTriangle className="w-4 h-4 text-amber-500" />
-          <span>6.3 采购预警看板</span>
-        </button>
-      </div>
+      {!hideTabHeader && (
+        <div className="flex border-b border-slate-200 bg-white rounded-t-xl px-4 pt-1 gap-2">
+          <button
+            onClick={() => setCurrentTab('oms61')}
+            className={`px-5 py-3.5 text-sm font-bold border-b-2 transition-all duration-200 flex items-center gap-2 ${
+              currentTab === 'oms61'
+                ? 'border-indigo-600 text-indigo-600'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <Layers className="w-4 h-4 text-indigo-600" />
+            <span>销售视角整车库存看板</span>
+          </button>
+          <button
+            onClick={() => setCurrentTab('oms62')}
+            className={`px-5 py-3.5 text-sm font-bold border-b-2 transition-all duration-200 flex items-center gap-2 ${
+              currentTab === 'oms62'
+                ? 'border-indigo-600 text-indigo-600'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <SlidersHorizontal className="w-4 h-4 text-emerald-500" />
+            <span>零部件库存看板</span>
+          </button>
+          <button
+            onClick={() => setCurrentTab('oms63')}
+            className={`px-5 py-3.5 text-sm font-bold border-b-2 transition-all duration-200 flex items-center gap-2 ${
+              currentTab === 'oms63'
+                ? 'border-indigo-600 text-indigo-600'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <AlertTriangle className="w-4 h-4 text-amber-500" />
+            <span>采购预警看板</span>
+          </button>
+        </div>
+      )}
 
       {/* CONDITIONAL RENDERING OF COHESIVE SUBSYSTEMS */}
       {currentTab === 'oms61' ? (
         <div className="space-y-6">
+          
+          {/* FILTER CONTROL PANEL */}
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <Filter className="w-4 h-4 text-slate-600" />
+                <h3 className="font-bold text-slate-800 text-sm">OMS 库存多维筛选与控制</h3>
+              </div>
+              <div className="text-xs text-slate-400 flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
+                当前状态：数据已自动同步
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
+              {/* Date Picker */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-500 flex items-center gap-1">
+                  <Calendar className="w-3 h-3" /> 当前日期
+                </label>
+                <input 
+                  type="date" 
+                  value={currentDate}
+                  onChange={(e) => setCurrentDate(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 text-slate-800 rounded-lg py-2 px-3 text-xs font-medium focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                />
+              </div>
+
+              {/* Region selector */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-500 flex items-center gap-1">
+                  <Building className="w-3 h-3" /> 请选择大区
+                </label>
+                <select
+                  value={filterRegion}
+                  onChange={(e) => {
+                    setFilterRegion(e.target.value);
+                    setFilterArea('all');
+                    setFilterCity('all');
+                  }}
+                  className="w-full bg-slate-50 border border-slate-200 text-slate-800 rounded-lg py-2 px-3 text-xs font-medium focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                >
+                  <option value="all">全部大区 (全国)</option>
+                  {uniqueRegions.map(r => (
+                    <option key={r} value={r}>{r}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Area selector */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-500 flex items-center gap-1">
+                  <MapPin className="w-3 h-3" /> 请选择区域
+                </label>
+                <select
+                  value={filterArea}
+                  onChange={(e) => {
+                    setFilterArea(e.target.value);
+                    setFilterCity('all');
+                  }}
+                  className="w-full bg-slate-50 border border-slate-200 text-slate-800 rounded-lg py-2 px-3 text-xs font-medium focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                >
+                  <option value="all">全部区域</option>
+                  {uniqueAreas.map(a => (
+                    <option key={a} value={a}>{a}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* City selector */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-500 flex items-center gap-1">
+                  <MapPin className="w-3 h-3" /> 请选择城市
+                </label>
+                <select
+                  value={filterCity}
+                  onChange={(e) => setFilterCity(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 text-slate-800 rounded-lg py-2 px-3 text-xs font-medium focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                >
+                  <option value="all">全部城市</option>
+                  {uniqueCities.map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Search/VIN filter */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-500 flex items-center gap-1">
+                  <Search className="w-3 h-3" /> 车架号 (VIN)
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="搜索车架号后6位"
+                    value={searchVin}
+                    onChange={(e) => setSearchVin(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 text-slate-800 rounded-lg py-2 pl-8 pr-3 text-xs font-medium focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none placeholder-slate-400"
+                  />
+                  <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-slate-400" />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap justify-between items-center gap-3 pt-2 border-t border-slate-100">
+              <div className="text-xs text-slate-500">
+                已筛选出 <span className="font-bold text-slate-800">{filteredVehicles.length}</span> 条明细，对应加权整车大盘预估：
+                <span className="font-bold text-indigo-600 font-mono text-sm ml-1">{totalStockCount} 辆</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleResetFilters}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  重置
+                </button>
+                <button
+                  onClick={() => { setCurrentTab('oms61'); setOms61SubTab('table'); }}
+                  className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors shadow-sm"
+                >
+                  <Search className="w-3.5 h-3.5" />
+                  查询明细
+                </button>
+              </div>
+            </div>
+          </div>
           {/* Inner Sub Tab Row for 6.1 */}
           <div className="flex border-b border-slate-200/60 bg-slate-50 p-1 rounded-xl gap-1 max-w-2xl">
             <button
@@ -955,7 +928,7 @@ export default function OmsDashboard() {
                     </div>
                     <div>
                       <h4 className="font-bold text-slate-800 text-sm">1. 当前库存多维统计</h4>
-                      <p className="text-[11px] text-slate-400">车型、配置、颜色、区域及仓库多重交叉统计</p>
+                      <p className="text-[11px] text-slate-400">车型、配置、区域及仓库多重交叉统计</p>
                     </div>
                   </div>
                   
@@ -973,32 +946,6 @@ export default function OmsDashboard() {
                               <span className="text-[10px] text-slate-400 font-mono">({w.pct}%)</span>
                             </div>
                           </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Color Breakdown */}
-                    <div>
-                      <span className="text-[10px] font-bold text-slate-400 block mb-1 uppercase tracking-wider">🎨 车身外观颜色统计</span>
-                      <div className="flex flex-wrap gap-1">
-                        {analysisCalculations.colorBreakdownList.map((c) => (
-                          <span 
-                            key={c.name}
-                            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold ${
-                              c.name.includes('白') ? 'bg-slate-100 text-slate-800 border border-slate-200' :
-                              c.name.includes('黑') ? 'bg-slate-900 text-slate-100 border border-slate-800' :
-                              c.name.includes('银') ? 'bg-slate-200 text-slate-800 border border-slate-350' :
-                              c.name.includes('蓝') ? 'bg-blue-50 text-blue-700 border border-blue-100' : 'bg-red-50 text-red-750 border border-red-100'
-                            }`}
-                          >
-                            <span className={`w-1.5 h-1.5 rounded-full ${
-                              c.name.includes('白') ? 'bg-white border border-slate-300' :
-                              c.name.includes('黑') ? 'bg-black' :
-                              c.name.includes('银') ? 'bg-slate-400' :
-                              c.name.includes('蓝') ? 'bg-blue-600' : 'bg-red-600'
-                            }`}></span>
-                            {c.name}: {c.count}辆
-                          </span>
                         ))}
                       </div>
                     </div>

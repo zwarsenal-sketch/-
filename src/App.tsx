@@ -4,40 +4,25 @@
  */
 
 import React, { useState } from 'react';
-import PitchDeck from './components/PitchDeck';
-import MethodologySandbox from './components/MethodologySandbox';
 import ScenarioSimulator from './components/ScenarioSimulator';
-import MetricsTarget from './components/MetricsTarget';
-import OmsDashboard from './components/OmsDashboard';
-import ApprovalRules from './components/ApprovalRules';
+import ProcurementApprovalPlugin from './components/ProcurementApprovalPlugin';
+import VehicleInventoryManager from './components/VehicleInventoryManager';
+import PartsInventoryManager from './components/PartsInventoryManager';
 import FittingAnalysis from './components/FittingAnalysis';
 import VehicleFitting from './components/VehicleFitting';
 import { 
-  Presentation, 
-  SlidersHorizontal, 
   PlayCircle, 
-  Target, 
-  TrendingUp, 
-  ShieldAlert, 
   Briefcase,
-  HelpCircle,
-  FileCheck2,
-  Clock,
-  Heart,
-  Database,
-  ClipboardList,
-  LineChart
+  Car,
+  Package,
+  LineChart,
+  ShieldCheck
 } from 'lucide-react';
 
-type TabType = 'pitch' | 'sandbox' | 'scenario' | 'metrics' | 'oms' | 'approvalRules' | 'fitting' | 'vehicleFitting';
+type TabType = 'scenario' | 'procurementPlugin' | 'vehicleStock' | 'partsStock' | 'fitting' | 'vehicleFitting';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<TabType>('pitch');
-
-  // Simulated metrics across the entire session to show high-level executive dashboard numbers
-  const sessionSavedCapital = 1540; // 1540万元
-  const pendingPartsAlertsCount = 2;
-  const currentLocalTime = "2026-07-09";
+  const [activeTab, setActiveTab] = useState<TabType>('procurementPlugin');
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans antialiased">
@@ -63,94 +48,72 @@ export default function App() {
           </div>
 
           {/* Navigation tab bar */}
-          <nav className="flex bg-slate-100/80 p-1 rounded-xl border border-slate-200/50">
+          <nav className="flex flex-wrap bg-slate-100/80 p-1 rounded-xl border border-slate-200/50 gap-1">
             <button 
-              onClick={() => setActiveTab('pitch')}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-all duration-200 ${
-                activeTab === 'pitch' 
-                  ? 'bg-white text-slate-950 shadow-sm font-bold' 
-                  : 'text-slate-500 hover:text-slate-800'
+              onClick={() => setActiveTab('procurementPlugin')}
+              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all duration-200 cursor-pointer ${
+                activeTab === 'procurementPlugin' 
+                  ? 'bg-emerald-600 text-white shadow-sm font-bold' 
+                  : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <Presentation className="w-3.5 h-3.5" />
-              1. 立项核心价值
-            </button>
-            <button 
-              onClick={() => setActiveTab('sandbox')}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-all duration-200 ${
-                activeTab === 'sandbox' 
-                  ? 'bg-white text-slate-950 shadow-sm font-bold' 
-                  : 'text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              <SlidersHorizontal className="w-3.5 h-3.5" />
-              2. 核心方法沙盘
+              <ShieldCheck className="w-3.5 h-3.5" />
+              1. 智能采购合理性审批插件
             </button>
             <button 
               onClick={() => setActiveTab('scenario')}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-all duration-200 ${
+              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all duration-200 cursor-pointer ${
                 activeTab === 'scenario' 
                   ? 'bg-white text-slate-950 shadow-sm font-bold' 
                   : 'text-slate-500 hover:text-slate-800'
               }`}
             >
               <PlayCircle className="w-3.5 h-3.5" />
-              3. 业务场景仿真
+              2. 业务场景仿真
             </button>
             <button 
-              onClick={() => setActiveTab('oms')}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-all duration-200 ${
-                activeTab === 'oms' 
-                  ? 'bg-white text-slate-950 shadow-sm font-bold' 
+              onClick={() => setActiveTab('vehicleStock')}
+              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all duration-200 cursor-pointer ${
+                activeTab === 'vehicleStock' 
+                  ? 'bg-white text-indigo-600 shadow-sm font-bold' 
                   : 'text-slate-500 hover:text-slate-800'
               }`}
             >
-              <Database className="w-3.5 h-3.5" />
-              4. 整车库存看板
+              <Car className="w-3.5 h-3.5 text-indigo-600" />
+              3. 整车库存
             </button>
             <button 
-              onClick={() => setActiveTab('approvalRules')}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-all duration-200 ${
-                activeTab === 'approvalRules' 
-                  ? 'bg-white text-slate-950 shadow-sm font-bold' 
+              onClick={() => setActiveTab('partsStock')}
+              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all duration-200 cursor-pointer ${
+                activeTab === 'partsStock' 
+                  ? 'bg-white text-emerald-600 shadow-sm font-bold' 
                   : 'text-slate-500 hover:text-slate-800'
               }`}
             >
-              <ClipboardList className="w-3.5 h-3.5" />
-              5. 采购审批与预警规则
+              <Package className="w-3.5 h-3.5 text-emerald-600" />
+              4. 零部件库存
             </button>
             <button 
               onClick={() => setActiveTab('fitting')}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-all duration-200 ${
+              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all duration-200 cursor-pointer ${
                 activeTab === 'fitting' 
                   ? 'bg-white text-slate-950 shadow-sm font-bold' 
                   : 'text-slate-500 hover:text-slate-800'
               }`}
             >
               <LineChart className="w-3.5 h-3.5 text-indigo-500" />
-              6. 整体拟合大盘
+              5. 整体拟合大盘
             </button>
             <button 
               onClick={() => setActiveTab('vehicleFitting')}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-all duration-200 ${
+              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all duration-200 cursor-pointer ${
                 activeTab === 'vehicleFitting' 
                   ? 'bg-white text-slate-950 shadow-sm font-bold' 
                   : 'text-slate-500 hover:text-slate-800'
               }`}
             >
               <LineChart className="w-3.5 h-3.5 text-emerald-500" />
-              7. 车型拟合诊断 (新)
-            </button>
-            <button 
-              onClick={() => setActiveTab('metrics')}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-all duration-200 ${
-                activeTab === 'metrics' 
-                  ? 'bg-white text-slate-950 shadow-sm font-bold' 
-                  : 'text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              <Target className="w-3.5 h-3.5" />
-              8. 项目达成指标
+              6. 车型拟合诊断 (新)
             </button>
           </nav>
         </div>
@@ -160,14 +123,12 @@ export default function App() {
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 pb-16 space-y-8">
         
         {/* Render Tab Contents */}
-        {activeTab === 'pitch' && <PitchDeck />}
-        {activeTab === 'sandbox' && <MethodologySandbox />}
+        {activeTab === 'procurementPlugin' && <ProcurementApprovalPlugin />}
         {activeTab === 'scenario' && <ScenarioSimulator />}
-        {activeTab === 'approvalRules' && <ApprovalRules />}
+        {activeTab === 'vehicleStock' && <VehicleInventoryManager />}
+        {activeTab === 'partsStock' && <PartsInventoryManager />}
         {activeTab === 'fitting' && <FittingAnalysis />}
         {activeTab === 'vehicleFitting' && <VehicleFitting />}
-        {activeTab === 'metrics' && <MetricsTarget />}
-        {activeTab === 'oms' && <OmsDashboard />}
 
       </main>
     </div>

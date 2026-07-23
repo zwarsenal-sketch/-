@@ -587,20 +587,79 @@ export default function VehicleFitting() {
   const [showInv, setShowInv] = useState(true);
   const [showApply, setShowApply] = useState(true);
   const [showDem, setShowDem] = useState(true);
+  const [showChannel, setShowChannel] = useState(true);
   const [showAct, setShowAct] = useState(true);
 
-  // Selected vehicle datasets
-  const activeData = useMemo(() => {
+  // Future 3 months forecast raw data
+  const v3m8ForecastRaw = useMemo(() => [
+    { month: '2026-07', planProd: 450, forecastDirectApply: 210, forecastDirectSales: 180, forecastChannelSales: 300 },
+    { month: '2026-08', planProd: 520, forecastDirectApply: 230, forecastDirectSales: 200, forecastChannelSales: 350 },
+    { month: '2026-09', planProd: 600, forecastDirectApply: 260, forecastDirectSales: 230, forecastChannelSales: 420 },
+  ], []);
+
+  const vDaMianForecastRaw = useMemo(() => [
+    { month: '2026-07', planProd: 2200, forecastDirectApply: 1100, forecastDirectSales: 900, forecastChannelSales: 1500 },
+    { month: '2026-08', planProd: 2500, forecastDirectApply: 1200, forecastDirectSales: 1000, forecastChannelSales: 1600 },
+    { month: '2026-09', planProd: 2800, forecastDirectApply: 1300, forecastDirectSales: 1100, forecastChannelSales: 1850 },
+  ], []);
+
+  // Selected vehicle historical datasets
+  const histData = useMemo(() => {
     return selectedModel === 'v3m8' ? v3m8Data : vDaMianData;
   }, [selectedModel]);
 
+  // Combined timeline (historical + future 3 months forecast)
+  const fullTimeline = useMemo(() => {
+    const rawForecast = selectedModel === 'v3m8' ? v3m8ForecastRaw : vDaMianForecastRaw;
+    
+    // Calculate projected inventory sequentially
+    let lastInv = histData[histData.length - 1].inventory;
+    const forecastItems = rawForecast.map((f) => {
+      const forecastSales = f.forecastDirectSales + f.forecastChannelSales;
+      const projInv = Math.max(0, lastInv + f.planProd - forecastSales);
+      lastInv = projInv;
+      return {
+        month: f.month,
+        production: f.planProd,
+        inventory: projInv,
+        directApply: f.forecastDirectApply,
+        directSales: f.forecastDirectSales,
+        channelSales: f.forecastChannelSales,
+        actualSales: forecastSales,
+        factoryStock: Math.round(projInv * 0.6),
+        storeStock: Math.round(projInv * 0.4),
+        gap: f.planProd - forecastSales,
+        coverage: Number((projInv / (forecastSales || 1)).toFixed(2)),
+        productionSalesRate: Math.round((f.planProd / (forecastSales || 1)) * 100),
+        isForecast: true,
+        planProd: f.planProd,
+        forecastSales: forecastSales,
+      };
+    });
+
+    const historicalItems = histData.map(d => ({
+      ...d,
+      isForecast: false,
+      planProd: d.production,
+      forecastSales: d.actualSales,
+    }));
+
+    return [...historicalItems, ...forecastItems];
+  }, [selectedModel, histData, v3m8ForecastRaw, vDaMianForecastRaw]);
+
+  // Index boundary for timeline split
+  const histCutoffIndex = histData.length - 1;
+
+  // Selected vehicle datasets for timeline view
+  const activeData = fullTimeline;
+
   // Adjust selected index on model change to fit boundaries
   useMemo(() => {
-    const maxIndex = selectedModel === 'v3m8' ? 3 : 5;
+    const maxIndex = activeData.length - 1;
     if (selectedIndex > maxIndex) {
       setSelectedIndex(maxIndex);
     }
-  }, [selectedModel]);
+  }, [selectedModel, activeData.length]);
 
   const selectedMonthData = activeData[selectedIndex] || activeData[activeData.length - 1];
 
@@ -611,18 +670,20 @@ export default function VehicleFitting() {
   }, [selectedCell, getAnomalyDetail]);
 
   // Helper values for drawing SVG Chart
-  const svgWidth = 800;
-  const svgHeight = 350;
+  const svgWidth = 850;
+  const svgHeight = 360;
   const paddingLeft = 50;
-  const paddingRight = 40;
-  const paddingTop = 30;
-  const paddingBottom = 40;
+  const paddingRight = 45;
+  const paddingTop = 35;
+  const paddingBottom = 45;
 
   const chartWidth = svgWidth - paddingLeft - paddingRight;
   const chartHeight = svgHeight - paddingTop - paddingBottom;
 
   const maxVal = useMemo(() => {
-    const vals = activeData.flatMap(d => [d.production, d.inventory, d.directApply, d.directSales, d.actualSales]);
+    const vals = activeData.flatMap(d => [
+      d.production, d.inventory, d.directApply, d.directSales, d.channelSales, d.actualSales, d.planProd, d.forecastSales
+    ]);
     return Math.max(...vals, 100) * 1.15;
   }, [activeData]);
 
@@ -637,29 +698,78 @@ export default function VehicleFitting() {
 
   // Build SVG Paths
   const linePaths = useMemo(() => {
-    const prodPoints: string[] = [];
-    const invPoints: string[] = [];
-    const appPoints: string[] = [];
-    const demPoints: string[] = [];
-    const actPoints: string[] = [];
+    // 1. Historical & Forecast Production
+    const histProdPoints: string[] = [];
+    const forecastProdPoints: string[] = [];
+
+    // 2. Direct Apply (直营提报: 前6月实线, 未来虚线)
+    const histApplyPoints: string[] = [];
+    const forecastApplyPoints: string[] = [];
+
+    // 3. Direct Sales (直营销售: 前6月实线, 未来虚线)
+    const histDirectSalesPoints: string[] = [];
+    const forecastDirectSalesPoints: string[] = [];
+
+    // 4. Channel Sales (渠道销售: 前6月实线, 未来虚线)
+    const histChannelSalesPoints: string[] = [];
+    const forecastChannelSalesPoints: string[] = [];
+
+    // 5. Actual / Total Sales (实际销售=直营+渠道: 前6月实线, 未来虚线)
+    const histActPoints: string[] = [];
+    const forecastActPoints: string[] = [];
+
+    // 6. Inventory (总车库存: 前6月实线, 未来虚线)
+    const histInvPoints: string[] = [];
+    const forecastInvPoints: string[] = [];
 
     activeData.forEach((d, idx) => {
       const x = getXCoordinate(idx, activeData.length);
-      prodPoints.push(`${x},${getYCoordinate(d.production)}`);
-      invPoints.push(`${x},${getYCoordinate(d.inventory)}`);
-      appPoints.push(`${x},${getYCoordinate(d.directApply)}`);
-      demPoints.push(`${x},${getYCoordinate(d.directSales)}`);
-      actPoints.push(`${x},${getYCoordinate(d.actualSales)}`);
+      const yProd = getYCoordinate(d.production);
+      const yApply = getYCoordinate(d.directApply);
+      const yDirect = getYCoordinate(d.directSales);
+      const yChannel = getYCoordinate(d.channelSales);
+      const yAct = getYCoordinate(d.actualSales);
+      const yInv = getYCoordinate(d.inventory);
+
+      if (idx <= histCutoffIndex) {
+        histProdPoints.push(`${x},${yProd}`);
+        histApplyPoints.push(`${x},${yApply}`);
+        histDirectSalesPoints.push(`${x},${yDirect}`);
+        histChannelSalesPoints.push(`${x},${yChannel}`);
+        histActPoints.push(`${x},${yAct}`);
+        histInvPoints.push(`${x},${yInv}`);
+      }
+
+      if (idx >= histCutoffIndex) {
+        forecastProdPoints.push(`${x},${yProd}`);
+        forecastApplyPoints.push(`${x},${yApply}`);
+        forecastDirectSalesPoints.push(`${x},${yDirect}`);
+        forecastChannelSalesPoints.push(`${x},${yChannel}`);
+        forecastActPoints.push(`${x},${yAct}`);
+        forecastInvPoints.push(`${x},${yInv}`);
+      }
     });
 
     return {
-      prod: `M ${prodPoints.join(' L ')}`,
-      inv: `M ${invPoints.join(' L ')}`,
-      app: `M ${appPoints.join(' L ')}`,
-      dem: `M ${demPoints.join(' L ')}`,
-      act: `M ${actPoints.join(' L ')}`
+      histProd: `M ${histProdPoints.join(' L ')}`,
+      forecastProd: `M ${forecastProdPoints.join(' L ')}`,
+
+      histApply: `M ${histApplyPoints.join(' L ')}`,
+      forecastApply: `M ${forecastApplyPoints.join(' L ')}`,
+
+      histDirectSales: `M ${histDirectSalesPoints.join(' L ')}`,
+      forecastDirectSales: `M ${forecastDirectSalesPoints.join(' L ')}`,
+
+      histChannelSales: `M ${histChannelSalesPoints.join(' L ')}`,
+      forecastChannelSales: `M ${forecastChannelSalesPoints.join(' L ')}`,
+
+      histAct: `M ${histActPoints.join(' L ')}`,
+      forecastAct: `M ${forecastActPoints.join(' L ')}`,
+
+      histInv: `M ${histInvPoints.join(' L ')}`,
+      forecastInv: `M ${forecastInvPoints.join(' L ')}`,
     };
-  }, [activeData, maxVal]);
+  }, [activeData, maxVal, histCutoffIndex]);
 
   // General model insights & fitting analysis text
   const fittingAnalysisSummary = useMemo(() => {
@@ -845,11 +955,46 @@ export default function VehicleFitting() {
                 );
               })}
 
+              {/* Forecast Area Shading & Divider Line */}
+              {(() => {
+                const xCutoff = getXCoordinate(histCutoffIndex, activeData.length);
+                const xEnd = getXCoordinate(activeData.length - 1, activeData.length);
+                return (
+                  <g key="forecastRegion">
+                    <rect 
+                      x={xCutoff} 
+                      y={paddingTop} 
+                      width={Math.max(0, xEnd - xCutoff)} 
+                      height={chartHeight} 
+                      fill="rgba(99, 102, 241, 0.04)" 
+                      rx="6"
+                    />
+                    <line 
+                      x1={xCutoff} 
+                      y1={paddingTop - 10} 
+                      x2={xCutoff} 
+                      y2={paddingTop + chartHeight} 
+                      stroke="#6366f1" 
+                      strokeWidth="1.5" 
+                      strokeDasharray="4 4" 
+                    />
+                    <text 
+                      x={xCutoff + 6} 
+                      y={paddingTop - 4} 
+                      className="fill-indigo-600 font-extrabold text-[9px] font-mono"
+                    >
+                      🔮 未来3个月 预测与计划 (虚线)
+                    </text>
+                  </g>
+                );
+              })()}
+
               {/* X Axis & Labels */}
               {activeData.map((d, idx) => {
                 const x = getXCoordinate(idx, activeData.length);
                 const isSelected = selectedIndex === idx;
                 const isHovered = hoveredIndex === idx;
+                const isForecastNode = d.isForecast;
                 return (
                   <g key={idx}>
                     <line 
@@ -867,10 +1012,14 @@ export default function VehicleFitting() {
                       y={paddingTop + chartHeight + 18} 
                       textAnchor="middle" 
                       className={`text-[9px] font-bold ${
-                        isSelected ? 'fill-indigo-600 font-extrabold text-[10px]' : 'fill-slate-400'
+                        isSelected 
+                          ? 'fill-indigo-600 font-extrabold text-[10px]' 
+                          : isForecastNode 
+                            ? 'fill-indigo-500 font-semibold' 
+                            : 'fill-slate-400'
                       }`}
                     >
-                      {d.month}
+                      {d.month} {isForecastNode ? '(预测)' : ''}
                     </text>
                   </g>
                 );
@@ -878,18 +1027,147 @@ export default function VehicleFitting() {
 
               {/* Lines & Fill areas based on legend settings */}
               
-              {/* Direct Apply (直营申请) - Pink / Fuchsia */}
+              {/* 1. Direct Apply (直营提报: 前6个月实线, 未来虚线) - Pink */}
               {showApply && (
                 <>
                   <path 
-                    d={`${linePaths.app} L ${getXCoordinate(activeData.length - 1, activeData.length)},${paddingTop + chartHeight} L ${getXCoordinate(0, activeData.length)},${paddingTop + chartHeight} Z`}
-                    fill="url(#gradApply)"
-                    className="opacity-15 transition-all duration-300"
-                  />
-                  <path 
-                    d={linePaths.app}
+                    d={linePaths.histApply}
                     fill="none"
                     stroke="#ec4899"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="transition-all duration-300"
+                  />
+                  <path 
+                    d={linePaths.forecastApply}
+                    fill="none"
+                    stroke="#db2777"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeDasharray="6 4"
+                    className="transition-all duration-300"
+                  />
+                </>
+              )}
+
+              {/* 2. Direct Sales (直营销售: 前6个月实线, 未来虚线) - Purple */}
+              {showDem && (
+                <>
+                  <path 
+                    d={linePaths.histDirectSales}
+                    fill="none"
+                    stroke="#a855f7"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="transition-all duration-300"
+                  />
+                  <path 
+                    d={linePaths.forecastDirectSales}
+                    fill="none"
+                    stroke="#9333ea"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeDasharray="6 4"
+                    className="transition-all duration-300"
+                  />
+                </>
+              )}
+
+              {/* 3. Channel Sales (渠道销售: 前6个月实线, 未来虚线) - Cyan */}
+              {showChannel && (
+                <>
+                  <path 
+                    d={linePaths.histChannelSales}
+                    fill="none"
+                    stroke="#06b6d4"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="transition-all duration-300"
+                  />
+                  <path 
+                    d={linePaths.forecastChannelSales}
+                    fill="none"
+                    stroke="#0891b2"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeDasharray="6 4"
+                    className="transition-all duration-300"
+                  />
+                </>
+              )}
+
+              {/* 4. Actual Sales = Direct + Channel (实际销售: 前6个月实线, 未来虚线) - Blue */}
+              {showAct && (
+                <>
+                  <path 
+                    d={linePaths.histAct}
+                    fill="none"
+                    stroke="#2563eb"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="transition-all duration-300"
+                  />
+                  <path 
+                    d={linePaths.forecastAct}
+                    fill="none"
+                    stroke="#1d4ed8"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeDasharray="6 4"
+                    className="transition-all duration-300"
+                  />
+                </>
+              )}
+
+              {/* 5. Production (生产入库: 前6个月实线, 未来虚线) - Emerald */}
+              {showProd && (
+                <>
+                  <path 
+                    d={linePaths.histProd}
+                    fill="none"
+                    stroke="#10b981"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="transition-all duration-300"
+                  />
+                  <path 
+                    d={linePaths.forecastProd}
+                    fill="none"
+                    stroke="#059669"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeDasharray="6 4"
+                    className="transition-all duration-300"
+                  />
+                </>
+              )}
+
+              {/* 6. Inventory (总车库存: 前6个月实线, 未来虚线) - Amber */}
+              {showInv && (
+                <>
+                  <path 
+                    d={linePaths.histInv}
+                    fill="none"
+                    stroke="#f59e0b"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="transition-all duration-300"
+                  />
+                  <path 
+                    d={linePaths.forecastInv}
+                    fill="none"
+                    stroke="#d97706"
                     strokeWidth="2.5"
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -899,76 +1177,18 @@ export default function VehicleFitting() {
                 </>
               )}
 
-              {/* Direct Sales (直营销售) Area & Line - Purple */}
-              {showDem && (
-                <>
-                  <path 
-                    d={`${linePaths.dem} L ${getXCoordinate(activeData.length - 1, activeData.length)},${paddingTop + chartHeight} L ${getXCoordinate(0, activeData.length)},${paddingTop + chartHeight} Z`}
-                    fill="url(#gradDem)"
-                    className="transition-all duration-300"
-                  />
-                  <path 
-                    d={linePaths.dem}
-                    fill="none"
-                    stroke="#a855f7"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="transition-all duration-300"
-                  />
-                </>
-              )}
-
-              {/* 2. Actual Sales (总销售) Line - Blue */}
-              {showAct && (
-                <path 
-                  d={linePaths.act}
-                  fill="none"
-                  stroke="#3b82f6"
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="transition-all duration-300"
-                />
-              )}
-
-              {/* 3. Production (生产入库) Line - Emerald */}
-              {showProd && (
-                <path 
-                  d={linePaths.prod}
-                  fill="none"
-                  stroke="#10b981"
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeDasharray="none"
-                  className="transition-all duration-300"
-                />
-              )}
-
-              {/* 4. Inventory (总库存) Line - Amber */}
-              {showInv && (
-                <path 
-                  d={linePaths.inv}
-                  fill="none"
-                  stroke="#f59e0b"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="transition-all duration-300"
-                />
-              )}
-
-              {/* Interactive Interactive Dots */}
+              {/* Interactive Dots */}
               {activeData.map((d, idx) => {
                 const x = getXCoordinate(idx, activeData.length);
                 const isSelected = selectedIndex === idx;
                 const isHovered = hoveredIndex === idx;
+                const isForecastNode = d.isForecast;
 
                 const yProd = getYCoordinate(d.production);
                 const yInv = getYCoordinate(d.inventory);
-                const yApp = getYCoordinate(d.directApply);
-                const yDem = getYCoordinate(d.directSales);
+                const yApply = getYCoordinate(d.directApply);
+                const yDirect = getYCoordinate(d.directSales);
+                const yChannel = getYCoordinate(d.channelSales);
                 const yAct = getYCoordinate(d.actualSales);
 
                 return (
@@ -1004,7 +1224,7 @@ export default function VehicleFitting() {
                         cx={x} 
                         cy={yProd} 
                         r={isSelected ? 5.5 : 4} 
-                        className="fill-emerald-500 stroke-white stroke-[1.5] shadow"
+                        className={`fill-emerald-500 stroke-white stroke-[1.5] shadow ${isForecastNode ? 'ring-2 ring-emerald-300' : ''}`}
                       />
                     )}
 
@@ -1014,7 +1234,7 @@ export default function VehicleFitting() {
                         cx={x} 
                         cy={yInv} 
                         r={isSelected ? 5.5 : 4} 
-                        className="fill-amber-500 stroke-white stroke-[1.5] shadow"
+                        className={`fill-amber-500 stroke-white stroke-[1.5] shadow ${isForecastNode ? 'ring-2 ring-amber-300' : ''}`}
                       />
                     )}
 
@@ -1022,19 +1242,29 @@ export default function VehicleFitting() {
                     {showApply && (
                       <circle 
                         cx={x} 
-                        cy={yApp} 
+                        cy={yApply} 
                         r={isSelected ? 5.5 : 4} 
-                        className="fill-pink-500 stroke-white stroke-[1.5] shadow"
+                        className={`fill-pink-500 stroke-white stroke-[1.5] shadow ${isForecastNode ? 'ring-2 ring-pink-300' : ''}`}
                       />
                     )}
 
-                    {/* Demand dots */}
+                    {/* Direct Sales dots */}
                     {showDem && (
                       <circle 
                         cx={x} 
-                        cy={yDem} 
+                        cy={yDirect} 
                         r={isSelected ? 5.5 : 4} 
-                        className="fill-purple-500 stroke-white stroke-[1.5] shadow"
+                        className={`fill-purple-500 stroke-white stroke-[1.5] shadow ${isForecastNode ? 'ring-2 ring-purple-300' : ''}`}
+                      />
+                    )}
+
+                    {/* Channel Sales dots */}
+                    {showChannel && (
+                      <circle 
+                        cx={x} 
+                        cy={yChannel} 
+                        r={isSelected ? 5.5 : 4} 
+                        className={`fill-cyan-500 stroke-white stroke-[1.5] shadow ${isForecastNode ? 'ring-2 ring-cyan-300' : ''}`}
                       />
                     )}
 
@@ -1044,24 +1274,13 @@ export default function VehicleFitting() {
                         cx={x} 
                         cy={yAct} 
                         r={isSelected ? 6.5 : 4.5} 
-                        className="fill-blue-600 stroke-white stroke-[2] shadow-md"
+                        className={`fill-blue-600 stroke-white stroke-[2] shadow-md ${isForecastNode ? 'ring-2 ring-blue-300' : ''}`}
                       />
                     )}
                   </g>
                 );
               })}
 
-              {/* Gradients */}
-              <defs>
-                <linearGradient id="gradDem" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#a855f7" stopOpacity="0.15"/>
-                  <stop offset="100%" stopColor="#a855f7" stopOpacity="0.0"/>
-                </linearGradient>
-                <linearGradient id="gradApply" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#ec4899" stopOpacity="0.12"/>
-                  <stop offset="100%" stopColor="#ec4899" stopOpacity="0.0"/>
-                </linearGradient>
-              </defs>
             </svg>
 
             {/* Float tooltip during hover */}
@@ -1069,34 +1288,50 @@ export default function VehicleFitting() {
               <div 
                 className="absolute bg-slate-900/95 text-white p-3 rounded-xl shadow-xl text-[10px] space-y-1 z-20 pointer-events-none border border-slate-700/50 backdrop-blur-md"
                 style={{
-                  left: `${(hoveredIndex / (activeData.length - 1)) * 75 + 10}%`,
-                  top: '15%'
+                  left: `${(hoveredIndex / (activeData.length - 1)) * 72 + 8}%`,
+                  top: '10%'
                 }}
               >
                 <div className="font-bold border-b border-slate-700/60 pb-1 flex justify-between gap-4">
-                  <span>{activeData[hoveredIndex].month} 数据</span>
-                  <span className="text-indigo-300 font-mono">第 {hoveredIndex + 1} 个月</span>
+                  <span>{activeData[hoveredIndex].month} {activeData[hoveredIndex].isForecast ? '【未来预测/计划】' : '【历史实测】'}</span>
+                  <span className="text-indigo-300 font-mono">第 {hoveredIndex + 1} 节点</span>
                 </div>
                 <div className="space-y-0.5 pt-1 font-mono">
                   <div className="flex justify-between gap-6">
-                    <span className="text-slate-400">● 生产入库:</span>
+                    <span className="text-slate-400">
+                      {activeData[hoveredIndex].isForecast ? '● 生产计划(入库):' : '● 生产入库:'}
+                    </span>
                     <strong className="text-emerald-400">{activeData[hoveredIndex].production} 辆</strong>
                   </div>
                   <div className="flex justify-between gap-6">
-                    <span className="text-slate-400">● 总库存:</span>
-                    <strong className="text-amber-400">{activeData[hoveredIndex].inventory} 辆</strong>
-                  </div>
-                  <div className="flex justify-between gap-6">
-                    <span className="text-slate-400">● 直营申请:</span>
+                    <span className="text-slate-400">
+                      {activeData[hoveredIndex].isForecast ? '● 直营提报预测:' : '● 直营提报:'}
+                    </span>
                     <strong className="text-pink-400">{activeData[hoveredIndex].directApply} 辆</strong>
                   </div>
                   <div className="flex justify-between gap-6">
-                    <span className="text-slate-400">● 直营销售:</span>
+                    <span className="text-slate-400">
+                      {activeData[hoveredIndex].isForecast ? '● 直营销售预测:' : '● 直营销售:'}
+                    </span>
                     <strong className="text-purple-400">{activeData[hoveredIndex].directSales} 辆</strong>
                   </div>
                   <div className="flex justify-between gap-6">
-                    <span className="text-slate-400">● 总销售:</span>
-                    <strong className="text-blue-400">{activeData[hoveredIndex].actualSales} 辆</strong>
+                    <span className="text-slate-400">
+                      {activeData[hoveredIndex].isForecast ? '● 渠道销售预测:' : '● 渠道销售:'}
+                    </span>
+                    <strong className="text-cyan-400">{activeData[hoveredIndex].channelSales} 辆</strong>
+                  </div>
+                  <div className="flex justify-between gap-6 border-t border-slate-700/60 pt-1 mt-1">
+                    <span className="text-slate-200 font-bold">
+                      {activeData[hoveredIndex].isForecast ? '● 销售预测 (直营+渠道):' : '● 实际销售 (直营+渠道):'}
+                    </span>
+                    <strong className="text-blue-400 font-extrabold">{activeData[hoveredIndex].actualSales} 辆</strong>
+                  </div>
+                  <div className="flex justify-between gap-6">
+                    <span className="text-slate-400">
+                      {activeData[hoveredIndex].isForecast ? '● 推演期末总库存:' : '● 总车库存:'}
+                    </span>
+                    <strong className="text-amber-400">{activeData[hoveredIndex].inventory} 辆</strong>
                   </div>
                 </div>
               </div>
@@ -1105,76 +1340,72 @@ export default function VehicleFitting() {
           </div>
 
           {/* Legend Selector with Toggles */}
-          <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-3 pt-3 border-t border-slate-100 text-xs">
+          <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2 pt-3 border-t border-slate-100 text-xs">
             
             {/* Legend 1: Production */}
             <button 
               onClick={() => setShowProd(!showProd)}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border transition cursor-pointer font-semibold ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl border transition cursor-pointer font-semibold ${
                 showProd ? 'bg-emerald-50 border-emerald-200 text-emerald-800 shadow-sm' : 'bg-slate-50 border-slate-200/60 text-slate-400'
               }`}
             >
               <div className={`w-2.5 h-2.5 rounded-full ${showProd ? 'bg-emerald-500' : 'bg-slate-300'}`}></div>
-              <span>1. 生产入库</span>
-              <span className={`font-mono text-[9px] ${showProd ? 'text-emerald-600' : 'text-slate-400'}`}>
-                (H1: {activeData.reduce((s,d)=>s+d.production,0)}辆)
-              </span>
+              <span>1. 生产入库/计划</span>
             </button>
 
-            {/* Legend 2: Inventory */}
-            <button 
-              onClick={() => setShowInv(!showInv)}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border transition cursor-pointer font-semibold ${
-                showInv ? 'bg-amber-50 border-amber-200 text-amber-800 shadow-sm' : 'bg-slate-50 border-slate-200/60 text-slate-400'
-              }`}
-            >
-              <div className={`w-2.5 h-2.5 rounded-full ${showInv ? 'bg-amber-500' : 'bg-slate-300'}`}></div>
-              <span>2. 总车库存</span>
-              <span className={`font-mono text-[9px] ${showInv ? 'text-amber-600' : 'text-slate-400'}`}>
-                (期末: {activeData[activeData.length-1].inventory}辆)
-              </span>
-            </button>
-
-            {/* Legend 3: Direct Apply */}
+            {/* Legend 2: Direct Apply */}
             <button 
               onClick={() => setShowApply(!showApply)}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border transition cursor-pointer font-semibold ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl border transition cursor-pointer font-semibold ${
                 showApply ? 'bg-pink-50 border-pink-200 text-pink-800 shadow-sm' : 'bg-slate-50 border-slate-200/60 text-slate-400'
               }`}
             >
               <div className={`w-2.5 h-2.5 rounded-full ${showApply ? 'bg-pink-500' : 'bg-slate-300'}`}></div>
-              <span>3. 直营申请(提报)</span>
-              <span className={`font-mono text-[9px] ${showApply ? 'text-pink-600' : 'text-slate-400'}`}>
-                (H1: {activeData.reduce((s,d)=>s+d.directApply,0)}辆)
-              </span>
+              <span>2. 直营提报(前6月实线/未来虚线)</span>
             </button>
 
-            {/* Legend 4: Demand */}
+            {/* Legend 3: Direct Sales */}
             <button 
               onClick={() => setShowDem(!showDem)}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border transition cursor-pointer font-semibold ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl border transition cursor-pointer font-semibold ${
                 showDem ? 'bg-purple-50 border-purple-200 text-purple-800 shadow-sm' : 'bg-slate-50 border-slate-200/60 text-slate-400'
               }`}
             >
               <div className={`w-2.5 h-2.5 rounded-full ${showDem ? 'bg-purple-500' : 'bg-slate-300'}`}></div>
-              <span>4. 直营销售(直销)</span>
-              <span className={`font-mono text-[9px] ${showDem ? 'text-purple-600' : 'text-slate-400'}`}>
-                (H1: {activeData.reduce((s,d)=>s+d.directSales,0)}辆)
-              </span>
+              <span>3. 直营销售(前6月实线/未来虚线)</span>
             </button>
 
-            {/* Legend 5: Actual Sales */}
+            {/* Legend 4: Channel Sales */}
+            <button 
+              onClick={() => setShowChannel(!showChannel)}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl border transition cursor-pointer font-semibold ${
+                showChannel ? 'bg-cyan-50 border-cyan-200 text-cyan-800 shadow-sm' : 'bg-slate-50 border-slate-200/60 text-slate-400'
+              }`}
+            >
+              <div className={`w-2.5 h-2.5 rounded-full ${showChannel ? 'bg-cyan-500' : 'bg-slate-300'}`}></div>
+              <span>4. 渠道销售(前6月实线/未来虚线)</span>
+            </button>
+
+            {/* Legend 5: Actual Sales (Direct + Channel) */}
             <button 
               onClick={() => setShowAct(!showAct)}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border transition cursor-pointer font-semibold ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl border transition cursor-pointer font-semibold ${
                 showAct ? 'bg-blue-50 border-blue-200 text-blue-800 shadow-sm' : 'bg-slate-50 border-slate-200/60 text-slate-400'
               }`}
             >
               <div className={`w-2.5 h-2.5 rounded-full ${showAct ? 'bg-blue-600' : 'bg-slate-300'}`}></div>
-              <span>5. 实际销售(总销售)</span>
-              <span className={`font-mono text-[9px] ${showAct ? 'text-blue-600' : 'text-slate-400'}`}>
-                (H1: {activeData.reduce((s,d)=>s+d.actualSales,0)}辆)
-              </span>
+              <span>5. 实际销售=直营+渠道(前6月实线/未来虚线)</span>
+            </button>
+
+            {/* Legend 6: Inventory */}
+            <button 
+              onClick={() => setShowInv(!showInv)}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl border transition cursor-pointer font-semibold ${
+                showInv ? 'bg-amber-50 border-amber-200 text-amber-800 shadow-sm' : 'bg-slate-50 border-slate-200/60 text-slate-400'
+              }`}
+            >
+              <div className={`w-2.5 h-2.5 rounded-full ${showInv ? 'bg-amber-500' : 'bg-slate-300'}`}></div>
+              <span>6. 总车库存(前6月实线/未来虚线)</span>
             </button>
             
           </div>
@@ -1328,167 +1559,7 @@ export default function VehicleFitting() {
 
       </div>
 
-      {/* Interactive Plain-Spoken Diagnostics: Visual Fitting/Pinching Pattern Decoding (User requested: 根据这个折线图捏合情况暴露一些问题，结论说人话一点) */}
-      <div className="bg-gradient-to-br from-slate-900 to-indigo-950 text-white rounded-3xl p-6 sm:p-8 border border-slate-800 shadow-xl space-y-6 animate-fade-in relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
-        <div className="absolute bottom-0 left-10 w-60 h-60 bg-emerald-500/5 rounded-full blur-2xl pointer-events-none"></div>
-        
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800/80 pb-5 relative z-10">
-          <div className="space-y-1">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 text-[10px] font-extrabold border border-indigo-500/30 uppercase tracking-wider">
-              <LineChart className="w-3.5 h-3.5 text-indigo-400 animate-pulse" />
-              S&OP 折线大白话透视
-            </div>
-            <h2 className="text-base sm:text-lg font-extrabold text-white flex items-center gap-2 mt-1">
-              📊 怎么看懂这张折线图？—— 从曲线的【张嘴、捏合、平行】读懂背后的大问题
-            </h2>
-            <p className="text-xs text-slate-300">
-              别只看数字！折线图里的<b>“大张嘴（剪刀差）”</b>、<b>“打结（捏合）”</b>和<b>“两条线平行走”</b>，其实暴露了供应链中最真实的经营危机或良性控盘。
-            </p>
-          </div>
-          <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-3 py-1 rounded-lg font-extrabold self-start md:self-auto uppercase tracking-wide">
-            当前车型：{selectedModel === 'v3m8' ? '3米8微卡' : '多拉大面'}
-          </span>
-        </div>
 
-        {selectedModel === 'vDaMian' ? (
-          // Multi-column cards for Duola Damain (多拉大面)
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10">
-            
-            {/* Pattern 1: Pinching in Feb */}
-            <div className="bg-slate-900/60 p-5 rounded-2xl border border-emerald-500/20 space-y-3 flex flex-col justify-between hover:border-emerald-500/40 transition-colors">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 rounded text-[9px] font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/35">
-                    1. 底部强捏合
-                  </span>
-                  <strong className="text-xs text-slate-200">【2月份：抱团过冬】</strong>
-                </div>
-                <h3 className="text-sm font-extrabold text-white leading-normal">
-                  春节大刹车，三线在最底部紧紧拧在一起 🤝
-                </h3>
-                <p className="text-[11px] text-slate-300 leading-relaxed text-justify">
-                  <b>说人话：</b>2月份春节全国买车人少（销量大跌），工厂计划部非常敏捷，没有傻傻地继续拼命造车，而是<b>一脚把生产排产踩死（降到 339 辆）</b>。配合终端清库，把店里的呆滞车清到只剩<b>18 辆</b>。
-                </p>
-              </div>
-              <div className="bg-emerald-950/40 p-2.5 rounded-xl border border-emerald-900/40 text-[10px] text-emerald-400 font-bold mt-2">
-                📢 <b>大白话诊断：</b>这是最教科书式的精益控盘！该刹车时踩刹车，释放了上千万元的被压资金，为3月开春大战腾出了干净的场地。
-              </div>
-            </div>
-
-            {/* Pattern 2: Huge Gap in June */}
-            <div className="bg-slate-900/60 p-5 rounded-2xl border border-blue-500/20 space-y-3 flex flex-col justify-between hover:border-blue-500/40 transition-colors">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 rounded text-[9px] font-extrabold bg-blue-500/20 text-blue-300 border border-blue-500/35">
-                    2. 超大剪刀差
-                  </span>
-                  <strong className="text-xs text-slate-200">【6月份：超级卸洪】</strong>
-                </div>
-                <h3 className="text-sm font-extrabold text-white leading-normal">
-                  销量冲天，生产在线条下方张开“超级鳄鱼嘴” 🐊
-                </h3>
-                <p className="text-[11px] text-slate-300 leading-relaxed text-justify">
-                  <b>说人话：</b>6月终端爆发（蓝线上天到 3548 辆），工厂产能（绿线 2580 辆）根本跟不上。两条线张开了一个<b>超 1000 辆的超级大嘴巴</b>，但居然没发生大面积欠交退单！为什么？因为<b>4、5月份生产稍微超前了，建立了一个大容量的良性“库存蓄水池”</b>（橙线），关键时刻全拿去堵枪眼了。
-                </p>
-              </div>
-              <div className="bg-blue-950/40 p-2.5 rounded-xl border border-blue-900/40 text-[10px] text-blue-300 font-bold mt-2">
-                📢 <b>大白话诊断：</b>完美防守！这就是为什么做供应链要留“备用车安全蓄水池”，在 H1 年底大爆发时起到了完美防御。
-              </div>
-            </div>
-
-            {/* Pattern 3: Parallel mismatch */}
-            <div className="bg-slate-900/60 p-5 rounded-2xl border border-rose-500/20 space-y-3 flex flex-col justify-between hover:border-rose-500/40 transition-colors">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 rounded text-[9px] font-extrabold bg-rose-500/20 text-rose-300 border border-rose-500/35">
-                    3. 虚线/实线不合
-                  </span>
-                  <strong className="text-xs text-slate-200">【6月：账实大倒挂】</strong>
-                </div>
-                <h3 className="text-sm font-extrabold text-white leading-normal">
-                  销量（蓝）和在库（橙）同向上抬？不符物理定律！ ❌
-                </h3>
-                <p className="text-[11px] text-slate-300 leading-relaxed text-justify">
-                  <b>说人话：</b>正常来说，6月车子大卖，库存本该掉到底。但图里代表总库存的<b>橙线不降反升，居然高挂在 2387 辆！</b>大白话穿透：<b>许多直营大客户在年中冲量，提前开了发票（在账面上做成了销量），但这些车其实根本没发运，还在工厂堆场里停着呢！</b>
-                </p>
-              </div>
-              <div className="bg-rose-950/40 p-2.5 rounded-xl border border-rose-900/40 text-[10px] text-rose-400 font-bold mt-2">
-                📢 <b>大白话诊断：</b>严重红线预警！这属于隐性的“纸面虚荣”，实际上 2300 多台车还在总库压着，面临巨大的跌价和贬值风险，必须审计大宗合同！
-              </div>
-            </div>
-
-          </div>
-        ) : (
-          // Multi-column cards for 3.8m micro truck (3米8 微卡)
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10">
-            
-            {/* Pattern 1: Pinching in March */}
-            <div className="bg-slate-900/60 p-5 rounded-2xl border border-rose-500/20 space-y-3 flex flex-col justify-between hover:border-rose-500/40 transition-colors">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 rounded text-[9px] font-extrabold bg-rose-500/20 text-rose-300 border border-rose-500/35">
-                    1. 底部假贴死
-                  </span>
-                  <strong className="text-xs text-slate-200">【3月份：裸奔危机】</strong>
-                </div>
-                <h3 className="text-sm font-extrabold text-white leading-normal">
-                  三条线全部趴在最底下贴近 0，这可不是“轻资产” ⚠️
-                </h3>
-                <p className="text-[11px] text-slate-300 leading-relaxed text-justify">
-                  <b>说人话：</b>新车3月上市，生产线（50台）、销售线（16台）和库存线全都趴在最底下。<b>千万别以为这是库存管理好，这是大仓库存被拉到了零！</b>全中国店端手里仅仅只有 5 辆样车在充门面，整个体系没有任何安全缓冲垫。
-                </p>
-              </div>
-              <div className="bg-rose-950/40 p-2.5 rounded-xl border border-rose-900/40 text-[10px] text-rose-400 font-bold mt-2">
-                📢 <b>大白话诊断：</b>极其危险的裸奔！只要4月稍微有人下大定，因为工厂里连一辆底盘现车都没有，客户就会立刻因等太久而取消大定。
-              </div>
-            </div>
-
-            {/* Pattern 2: High Delay Bullwhip in May */}
-            <div className="bg-slate-900/60 p-5 rounded-2xl border border-amber-500/20 space-y-3 flex flex-col justify-between hover:border-amber-500/40 transition-colors">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 rounded text-[9px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/35">
-                    2. 恶性大张嘴
-                  </span>
-                  <strong className="text-xs text-slate-200">【5月份：慢半拍爆产】</strong>
-                </div>
-                <h3 className="text-sm font-extrabold text-white leading-normal">
-                  绿线上天、蓝线下坠，张开了一张丑陋的“大鳄鱼嘴” 🐊
-                </h3>
-                <p className="text-[11px] text-slate-300 leading-relaxed text-justify">
-                  <b>说人话：</b>4月份突然大卖 1019 辆（严重断货），计划部门动作太慢。到了5月才手忙脚乱地把核心零部件拉料、排产轰到 <b>1436 辆的历史极值（绿线冲天）</b>。然而此时<b>市场热度早就退去了（蓝线下滑到 732 辆）</b>，结果单月直接多造了 <b>704 辆车砸在手里</b>，库存瞬间暴涨4倍！
-                </p>
-              </div>
-              <div className="bg-amber-950/40 p-2.5 rounded-xl border border-amber-900/40 text-[10px] text-amber-300 font-bold mt-2">
-                📢 <b>大白话诊断：</b>这就是最典型的“牛鞭效应”悲剧！计划拍脑袋动作滞后了1个月。4月要车时没有，5月不要车了拼命造，导致 5000 万流动资金被死死压在仓库里。
-              </div>
-            </div>
-
-            {/* Pattern 3: Spatial Mismatch in June */}
-            <div className="bg-slate-900/60 p-5 rounded-2xl border border-rose-500/20 space-y-3 flex flex-col justify-between hover:border-rose-500/40 transition-colors">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 rounded text-[9px] font-extrabold bg-rose-500/20 text-rose-300 border border-rose-500/35">
-                    3. 时空错位交叉
-                  </span>
-                  <strong className="text-xs text-slate-200">【6月份：空间断流】</strong>
-                </div>
-                <h3 className="text-sm font-extrabold text-white leading-normal">
-                  总库存看去在回落，实际上发生了“南北极错位” ❄️🔥
-                </h3>
-                <p className="text-[11px] text-slate-300 leading-relaxed text-justify">
-                  <b>说人话：</b>6月份在库橙线（380辆）看着开始回落去库存了。但把成分拆开一看，直接惊掉下巴：<b>工厂总大仓积压了 303 辆（占 80%），而全国所有门店手里加起来一共才 77 辆车！</b>门店没车卖空城计退单，而工厂操场上停满了车快放不下了。
-                </p>
-              </div>
-              <div className="bg-rose-950/40 p-2.5 rounded-xl border border-rose-900/40 text-[10px] text-rose-400 font-bold mt-2">
-                📢 <b>大白话诊断：</b>严重干线物流梗阻！工厂车辆分发机制僵化，没能按各门店订单需求实现“拉动式配送”。店里旱死、厂里涝死。
-              </div>
-            </div>
-
-          </div>
-        )}
-      </div>
 
       {/* Section: Monthly S&OP Risk & Fitting Panorama (User requested: 基于生产、库存、提报、销量的关系，分析每个月的风险和情况，异常数据高亮显示) */}
       <div className="bg-slate-50 rounded-3xl p-6 sm:p-8 border border-slate-200/60 shadow-sm space-y-6 animate-fade-in">

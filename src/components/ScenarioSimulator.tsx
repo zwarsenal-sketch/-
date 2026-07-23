@@ -1457,14 +1457,6 @@ export default function ScenarioSimulator() {
                           <FileText className="w-4 h-4 text-slate-600" />
                           <span>七、 处理决策执行与高管审批签注</span>
                         </div>
-                        {!status && (
-                          <button 
-                            onClick={handleAutofillAIReason}
-                            className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[10px] px-2 py-1.5 rounded border border-emerald-200 flex items-center gap-1 font-extrabold transition-all duration-200 shadow-sm"
-                          >
-                            <span>💡 AI 一键生成合理化决策意见</span>
-                          </button>
-                        )}
                       </div>
 
                       {status ? (
@@ -1496,13 +1488,13 @@ export default function ScenarioSimulator() {
                         <div className="space-y-3">
                           <div className="space-y-1">
                             <label className="text-[11px] text-slate-500 font-bold block">
-                              高管决策批注说明 (填写或一键填充理由):
+                              高管决策批注说明:
                             </label>
                             <textarea
                               rows={3}
                               value={customReason}
                               onChange={(e) => setCustomReason(e.target.value)}
-                              placeholder="请在这输入审核批复意见，或点击右上角按钮由 AI 决策引擎一键匹配最专业的校验解释..."
+                              placeholder="请在此输入审核批复意见与管理指令..."
                               className="w-full text-xs p-3 rounded-lg border border-slate-300 bg-white shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20 font-medium leading-normal placeholder-slate-400"
                             />
                           </div>
@@ -1520,7 +1512,7 @@ export default function ScenarioSimulator() {
                                   onClick={() => executeApproval('APPROVE')}
                                   className="bg-slate-200 hover:bg-slate-300 text-slate-700 px-3 py-2 rounded-lg text-xs font-semibold"
                                 >
-                                  任性同意放行
+                                  同意放行
                                 </button>
                               </>
                             ) : selectedPart.isUnderstockWarning ? (
@@ -1529,23 +1521,17 @@ export default function ScenarioSimulator() {
                                   onClick={() => executeApproval('INCREASE')}
                                   className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-xs font-black shadow-sm flex items-center gap-1"
                                 >
-                                  <TrendingUp className="w-4 h-4" /> ⚡ 一键补充采购量至 500 个 (最低MOQ)
+                                  <TrendingUp className="w-4 h-4" /> ⚡ 补充采购量至 500 个 (最低MOQ)
                                 </button>
                                 <button 
                                   onClick={() => executeApproval('APPROVE')}
                                   className="bg-slate-200 hover:bg-slate-300 text-slate-700 px-3 py-2 rounded-lg text-xs font-semibold"
                                 >
-                                  照旧直接放行
+                                  直接放行
                                 </button>
                               </>
                             ) : (
                               <>
-                                <button 
-                                  onClick={() => executeApproval('REDUCE')}
-                                  className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-xs font-black shadow-sm flex items-center gap-1.5"
-                                >
-                                  <FileCheck className="w-4 h-4" /> ✂️ 智能优化核减采购量 (压减沉淀资金)
-                                </button>
                                 <button 
                                   onClick={() => executeApproval('REJECT')}
                                   className="bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 rounded-lg text-xs font-black shadow-sm"
