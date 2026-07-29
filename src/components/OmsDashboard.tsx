@@ -26,7 +26,9 @@ import {
   Clock,
   Briefcase,
   Users,
-  SlidersHorizontal
+  SlidersHorizontal,
+  Package,
+  LayoutGrid
 } from 'lucide-react';
 
 // Interfaces for 6.2 and 6.3 dashboards
@@ -270,12 +272,12 @@ const generateExpandedMockData = (): OmsVehicleItem[] => {
 
 export interface OmsDashboardProps {
   key?: React.Key;
-  initialTab?: 'oms61' | 'oms62' | 'oms63';
+  initialTab?: 'oms61' | 'oms62' | 'oms63' | 'oms62_63';
   hideTabHeader?: boolean;
 }
 
 export default function OmsDashboard({ initialTab = 'oms61', hideTabHeader = false }: OmsDashboardProps) {
-  const [currentTab, setCurrentTab] = useState<'oms61' | 'oms62' | 'oms63'>(initialTab);
+  const [currentTab, setCurrentTab] = useState<'oms61' | 'oms62' | 'oms63' | 'oms62_63'>(initialTab);
 
   useEffect(() => {
     setCurrentTab(initialTab);
@@ -2137,7 +2139,7 @@ export default function OmsDashboard({ initialTab = 'oms61', hideTabHeader = fal
           partsData={partsData} 
           setPartsData={setPartsData} 
         />
-      ) : (
+      ) : currentTab === 'oms63' ? (
         <OmsProcurementWarningDashboard 
           warningsData={warningsData} 
           setWarningsData={setWarningsData} 
@@ -2146,6 +2148,88 @@ export default function OmsDashboard({ initialTab = 'oms61', hideTabHeader = fal
           sessionClosedCount={sessionClosedCount} 
           setSessionClosedCount={setSessionClosedCount} 
         />
+      ) : (
+        /* oms62_63 Integrated Combined View */
+        <div className="space-y-8 animate-fade-in">
+          {/* Section 1: 采购预警智能控制台 Header */}
+          <div className="bg-slate-900 text-white p-4 rounded-2xl border border-slate-800 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-amber-500/20 text-amber-400 rounded-xl border border-amber-500/30">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-extrabold text-white tracking-tight flex items-center gap-2">
+                  采购预警控制台
+                  <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded font-mono">
+                    OMS 6.3 模块
+                  </span>
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  多源计划深度碰撞审计：实时审计过量申购、缺料高危与呆滞物料并下达压降指令
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 text-xs font-mono font-bold">
+              <span className="bg-amber-500/10 text-amber-400 border border-amber-500/30 px-3 py-1.5 rounded-xl">
+                {warningsData.filter(w => w.status === 'pending').length} 起待处理预警
+              </span>
+            </div>
+          </div>
+
+          <OmsProcurementWarningDashboard 
+            warningsData={warningsData} 
+            setWarningsData={setWarningsData} 
+            sessionAcceptedCount={sessionAcceptedCount} 
+            setSessionAcceptedCount={setSessionAcceptedCount} 
+            sessionClosedCount={sessionClosedCount} 
+            setSessionClosedCount={setSessionClosedCount} 
+          />
+
+          {/* Section Divider */}
+          <div className="relative py-2">
+            <div className="absolute inset-0 flex items-center" aria-hidden="true">
+              <div className="w-full border-t border-slate-200"></div>
+            </div>
+            <div className="relative flex justify-center">
+              <span className="bg-slate-100/90 px-4 py-1.5 text-xs font-extrabold text-slate-600 rounded-full border border-slate-200/80 shadow-xs flex items-center gap-1.5">
+                <Package className="w-3.5 h-3.5 text-emerald-600" />
+                ↓ 零部件实物库存台账与排产仿真 (OMS 6.2)
+              </span>
+            </div>
+          </div>
+
+          {/* Section 2: 零部件库存数据台账 Header */}
+          <div className="bg-slate-900 text-white p-4 rounded-2xl border border-slate-800 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-emerald-500/20 text-emerald-400 rounded-xl border border-emerald-500/30">
+                <Package className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-extrabold text-white tracking-tight flex items-center gap-2">
+                  零部件库存数据台账 & 供需消耗仿真
+                  <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded font-mono">
+                    OMS 6.2 模块
+                  </span>
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  三电系统与智能底盘核心物料库存台账，联动每日整车排产目标动态计算支撑天数
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 text-xs font-mono font-bold">
+              <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-3 py-1.5 rounded-xl">
+                {partsData.length} 种三电/底盘核心物料在账
+              </span>
+            </div>
+          </div>
+
+          <OmsPartsDashboard 
+            dailyProductionTarget={dailyProductionTarget} 
+            setDailyProductionTarget={setDailyProductionTarget} 
+            partsData={partsData} 
+            setPartsData={setPartsData} 
+          />
+        </div>
       )}
 
     </div>

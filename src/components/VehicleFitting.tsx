@@ -18,7 +18,10 @@ import {
   DollarSign,
   Calendar,
   LineChart,
+  BarChart2,
   ArrowRight,
+  ArrowDown,
+  ArrowUp,
   Info,
   ArrowUpRight,
   Sparkles,
@@ -66,18 +69,19 @@ const v3m8RawData: VehicleRawData[] = [
 
 // Exact image data 2: 多拉大面 (Raw values)
 const vDaMianRawData: VehicleRawData[] = [
-  { month: '2026-01', production: 1338, directApply: 817, directSales: 216, channelSales: 796, factoryStock: 741, storeStock: 918 },
-  { month: '2026-02', production: 339, directApply: 10, directSales: 202, channelSales: 260, factoryStock: 401, storeStock: 18 },
-  { month: '2026-03', production: 2047, directApply: 451, directSales: 1333, channelSales: 1975, factoryStock: 442, storeStock: 488 },
-  { month: '2026-04', production: 2520, directApply: 891, directSales: 752, channelSales: 873, factoryStock: 612, storeStock: 848 },
-  { month: '2026-05', production: 2641, directApply: 804, directSales: 927, channelSales: 1043, factoryStock: 1103, storeStock: 786 },
-  { month: '2026-06', production: 2580, directApply: 1597, directSales: 1301, channelSales: 2247, factoryStock: 1679, storeStock: 708 }
+  { month: '2026-01', production: 1338, directApply: 817, directSales: 180, channelSales: 796, factoryStock: 741, storeStock: 918 },
+  { month: '2026-02', production: 339, directApply: 10, directSales: 134, channelSales: 260, factoryStock: 401, storeStock: 18 },
+  { month: '2026-03', production: 2047, directApply: 451, directSales: 1063, channelSales: 1975, factoryStock: 442, storeStock: 488 },
+  { month: '2026-04', production: 2520, directApply: 891, directSales: 833, channelSales: 873, factoryStock: 612, storeStock: 848 },
+  { month: '2026-05', production: 2641, directApply: 804, directSales: 834, channelSales: 1043, factoryStock: 1103, storeStock: 786 },
+  { month: '2026-06', production: 2580, directApply: 1597, directSales: 1094, channelSales: 2247, factoryStock: 1679, storeStock: 708 }
 ];
 
 export default function VehicleFitting() {
   const [selectedModel, setSelectedModel] = useState<'v3m8' | 'vDaMian'>('vDaMian');
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number>(3); // default highlight last month
+  const [chartViewMode, setChartViewMode] = useState<'balance' | 'flow' | 'lines'>('balance');
 
   // Dynamically computed data tables containing both directApply and directSales
   const v3m8Data = useMemo(() => {
@@ -85,7 +89,7 @@ export default function VehicleFitting() {
       const actualSales = row.directSales + row.channelSales;
       const productionSalesRate = row.production === 0 ? 0 : Math.round((actualSales / row.production) * 1000) / 10;
       const gap = row.production - actualSales;
-      const inventory = row.factoryStock + row.storeStock;
+      const inventory = row.production + row.factoryStock + row.storeStock;
       const coverage = actualSales === 0 ? 0 : Math.round((inventory / actualSales) * 100) / 100;
       return {
         ...row,
@@ -104,7 +108,7 @@ export default function VehicleFitting() {
       const actualSales = row.directSales + row.channelSales;
       const productionSalesRate = row.production === 0 ? 0 : Math.round((actualSales / row.production) * 1000) / 10;
       const gap = row.production - actualSales;
-      const inventory = row.factoryStock + row.storeStock;
+      const inventory = row.production + row.factoryStock + row.storeStock;
       const coverage = actualSales === 0 ? 0 : Math.round((inventory / actualSales) * 100) / 100;
       return {
         ...row,
@@ -582,13 +586,21 @@ export default function VehicleFitting() {
     );
   }, [selectedCell, hoveredCell, getAnomalyDetail]);
 
-  // Toggle visible lines in the chart
+  // Toggle visible lines in the chart (Production Plan, Actual Sales, Total Stock default ON; others default GREYED OUT)
   const [showProd, setShowProd] = useState(true);
-  const [showInv, setShowInv] = useState(true);
-  const [showApply, setShowApply] = useState(true);
-  const [showDem, setShowDem] = useState(true);
-  const [showChannel, setShowChannel] = useState(true);
   const [showAct, setShowAct] = useState(true);
+  const [showInv, setShowInv] = useState(true);
+  const [showSafetyStock, setShowSafetyStock] = useState(true);
+  const [showApply, setShowApply] = useState(false);
+  const [showDem, setShowDem] = useState(false);
+  const [showChannel, setShowChannel] = useState(false);
+
+  // Safety Stock & Sales Forecast Multiplier state (Default Safety Stock Ratio = 2.0: 正常为月销量的2倍左右，可配置)
+  const [salesForecastMultiplier, setSalesForecastMultiplier] = useState<number>(1.0); // 1.0 = 100%
+  const [safetyStockRatio, setSafetyStockRatio] = useState<number>(2.0); // Default 2.0 (等于销售预测*2倍)
+
+  // Correlation calculation info modal toggle
+  const [showCorrelationModal, setShowCorrelationModal] = useState<boolean>(false);
 
   // Future 3 months forecast raw data
   const v3m8ForecastRaw = useMemo(() => [
@@ -608,7 +620,7 @@ export default function VehicleFitting() {
     return selectedModel === 'v3m8' ? v3m8Data : vDaMianData;
   }, [selectedModel]);
 
-  // Combined timeline (historical + future 3 months forecast)
+  // Combined timeline (historical + future 3 months forecast) with dynamic Safety Stock calculations
   const fullTimeline = useMemo(() => {
     const rawForecast = selectedModel === 'v3m8' ? v3m8ForecastRaw : vDaMianForecastRaw;
     
@@ -616,6 +628,8 @@ export default function VehicleFitting() {
     let lastInv = histData[histData.length - 1].inventory;
     const forecastItems = rawForecast.map((f) => {
       const forecastSales = f.forecastDirectSales + f.forecastChannelSales;
+      const adjustedForecastSales = Math.round(forecastSales * salesForecastMultiplier);
+      const safetyStock = Math.round(adjustedForecastSales * safetyStockRatio);
       const projInv = Math.max(0, lastInv + f.planProd - forecastSales);
       lastInv = projInv;
       return {
@@ -626,6 +640,8 @@ export default function VehicleFitting() {
         directSales: f.forecastDirectSales,
         channelSales: f.forecastChannelSales,
         actualSales: forecastSales,
+        adjustedSales: adjustedForecastSales,
+        safetyStock: safetyStock,
         factoryStock: Math.round(projInv * 0.6),
         storeStock: Math.round(projInv * 0.4),
         gap: f.planProd - forecastSales,
@@ -637,15 +653,21 @@ export default function VehicleFitting() {
       };
     });
 
-    const historicalItems = histData.map(d => ({
-      ...d,
-      isForecast: false,
-      planProd: d.production,
-      forecastSales: d.actualSales,
-    }));
+    const historicalItems = histData.map(d => {
+      const adjustedSales = Math.round(d.actualSales * salesForecastMultiplier);
+      const safetyStock = Math.round(adjustedSales * safetyStockRatio);
+      return {
+        ...d,
+        adjustedSales: adjustedSales,
+        safetyStock: safetyStock,
+        isForecast: false,
+        planProd: d.production,
+        forecastSales: d.actualSales,
+      };
+    });
 
     return [...historicalItems, ...forecastItems];
-  }, [selectedModel, histData, v3m8ForecastRaw, vDaMianForecastRaw]);
+  }, [selectedModel, histData, v3m8ForecastRaw, vDaMianForecastRaw, salesForecastMultiplier, safetyStockRatio]);
 
   // Index boundary for timeline split
   const histCutoffIndex = histData.length - 1;
@@ -662,6 +684,42 @@ export default function VehicleFitting() {
   }, [selectedModel, activeData.length]);
 
   const selectedMonthData = activeData[selectedIndex] || activeData[activeData.length - 1];
+
+  // Dynamic Fitting relationship analysis between Total Inventory and Dynamic Safety Stock
+  const fittingAnalysis = useMemo(() => {
+    const currentSales = selectedMonthData?.adjustedSales || selectedMonthData?.actualSales || 1;
+    const currentTargetSafety = Math.round(currentSales * safetyStockRatio);
+    const currentInv = selectedMonthData?.inventory || 0;
+    const currentRatio = currentTargetSafety > 0 ? Math.round((currentInv / currentTargetSafety) * 100) : 0;
+    const currentGap = currentInv - currentTargetSafety;
+
+    let currentStatus: 'ideal' | 'under' | 'over' = 'ideal';
+    if (currentRatio < 85) currentStatus = 'under';
+    else if (currentRatio > 125) currentStatus = 'over';
+
+    // Calculate overall timeline average fitting degree score
+    const timelineScores = activeData.map(d => {
+      const target = Math.round((d.adjustedSales || d.actualSales || 1) * safetyStockRatio);
+      if (target === 0) return 100;
+      const ratio = (d.inventory / target) * 100;
+      const deviation = Math.abs(ratio - 100);
+      return Math.max(0, Math.round(100 - deviation));
+    });
+
+    const avgScore = timelineScores.length > 0 
+      ? Math.round(timelineScores.reduce((a, b) => a + b, 0) / timelineScores.length)
+      : 0;
+
+    return {
+      targetSafety: currentTargetSafety,
+      currentInv,
+      sales: currentSales,
+      ratio: currentRatio,
+      gap: currentGap,
+      status: currentStatus,
+      avgScore
+    };
+  }, [selectedMonthData, safetyStockRatio, activeData]);
 
   // Helper to extract current selected cell anomaly info
   const currentAnomaly = useMemo(() => {
@@ -682,7 +740,7 @@ export default function VehicleFitting() {
 
   const maxVal = useMemo(() => {
     const vals = activeData.flatMap(d => [
-      d.production, d.inventory, d.directApply, d.directSales, d.channelSales, d.actualSales, d.planProd, d.forecastSales
+      d.production, d.inventory, d.directApply, d.directSales, d.channelSales, d.actualSales, d.planProd, d.forecastSales, d.safetyStock
     ]);
     return Math.max(...vals, 100) * 1.15;
   }, [activeData]);
@@ -722,6 +780,10 @@ export default function VehicleFitting() {
     const histInvPoints: string[] = [];
     const forecastInvPoints: string[] = [];
 
+    // 7. Safety Stock (安全库存 = 销售预测 * 系数: 前6月实线, 未来虚线)
+    const histSafetyPoints: string[] = [];
+    const forecastSafetyPoints: string[] = [];
+
     activeData.forEach((d, idx) => {
       const x = getXCoordinate(idx, activeData.length);
       const yProd = getYCoordinate(d.production);
@@ -730,6 +792,7 @@ export default function VehicleFitting() {
       const yChannel = getYCoordinate(d.channelSales);
       const yAct = getYCoordinate(d.actualSales);
       const yInv = getYCoordinate(d.inventory);
+      const ySafety = getYCoordinate(d.safetyStock);
 
       if (idx <= histCutoffIndex) {
         histProdPoints.push(`${x},${yProd}`);
@@ -738,6 +801,7 @@ export default function VehicleFitting() {
         histChannelSalesPoints.push(`${x},${yChannel}`);
         histActPoints.push(`${x},${yAct}`);
         histInvPoints.push(`${x},${yInv}`);
+        histSafetyPoints.push(`${x},${ySafety}`);
       }
 
       if (idx >= histCutoffIndex) {
@@ -747,6 +811,7 @@ export default function VehicleFitting() {
         forecastChannelSalesPoints.push(`${x},${yChannel}`);
         forecastActPoints.push(`${x},${yAct}`);
         forecastInvPoints.push(`${x},${yInv}`);
+        forecastSafetyPoints.push(`${x},${ySafety}`);
       }
     });
 
@@ -768,6 +833,9 @@ export default function VehicleFitting() {
 
       histInv: `M ${histInvPoints.join(' L ')}`,
       forecastInv: `M ${forecastInvPoints.join(' L ')}`,
+
+      histSafety: `M ${histSafetyPoints.join(' L ')}`,
+      forecastSafety: `M ${forecastSafetyPoints.join(' L ')}`,
     };
   }, [activeData, maxVal, histCutoffIndex]);
 
@@ -808,7 +876,7 @@ export default function VehicleFitting() {
       };
     } else {
       return {
-        relationshipTitle: "「多拉大面 纯电客货」产销存数理拟合关系",
+        relationshipTitle: "「多拉大面」产销存动态关系",
         relationshipDesc: "该车型作为核心主力爆款，产销在 6 个月内呈现『高度拟合、良性循环、蓄水池完美防御』的业务特征。1-2月份受春节效应影响大收大缩（2月销售仅 270 辆），但3月开春快速攀升，总销售达 2,426 辆；4-5月份销售高位稳定（1,764与1,847辆），排产也稳定在 2,520 和 2,641 辆，由于排产微超实际零售，库存建立了一个 1,800 辆规模的良性『大容量蓄水池』。这笔战略库存在6月份发挥了救命作用：6月直营大客户爆发 + 渠道冲量，总销量狂飙到 3,844 辆的历史极值，而排产仅 2,580 辆，出现 -1,264 辆的超高供需缺口。正是得益于5月末在库 1,889 辆的缓冲垫，成功完成了完美消纳，年底总库存结转 2,387 辆。全周期内产、销、存三条主线曲线拟合度高达 88.5%，属于极具代表性的良性供应链协同案例。",
         risks: [
           {
@@ -877,7 +945,7 @@ export default function VehicleFitting() {
                 }`}
               >
                 <Car className="w-3.5 h-3.5" />
-                多拉大面 (大容量客货)
+                多拉大面
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block animate-ping"></span>
               </button>
               <button
@@ -901,28 +969,547 @@ export default function VehicleFitting() {
         
         {/* Left Column: Interactive Graph with Line Config and legend (7 Cols) */}
         <div className="lg:col-span-8 bg-white rounded-2xl p-6 border border-slate-100 shadow-sm flex flex-col justify-between space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          {/* Header with View Switcher */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
             <div className="space-y-0.5">
               <h2 className="text-sm font-extrabold text-slate-900 flex items-center gap-1.5">
                 <LineChart className="w-4 h-4 text-indigo-600" />
-                {selectedModel === 'v3m8' ? '3米8 微卡' : '多拉大面 客货'} 4维度时序拟合曲线
+                {selectedModel === 'v3m8' ? '3米8 微卡' : '多拉大面'} 产销存动态关系与趋势
               </h2>
-              <p className="text-[11px] text-slate-400">
-                支持在下方图例中点击，自由隐藏部分折线；鼠标悬停或点击节点，可穿透查看具体某月的数理细节。
+              <p className="text-[11px] text-slate-500">
+                直观透视<b>【生产入库】</b>与<b>【实际销售】</b>剪刀差对<b>【期末总库存】</b>蓄水池的驱动演进
               </p>
             </div>
             
-            {/* Visual indicator of R² fitting quality */}
-            <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100 shrink-0">
-              <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></div>
-              <span className="text-[10px] text-slate-500">
-                周期供需重合度: <b className="font-mono text-slate-800 text-xs">{selectedModel === 'v3m8' ? '41.2% (高偏离)' : '88.5% (强契合)'}</b>
-              </span>
+            {/* View Mode Switcher */}
+            <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200/60 shrink-0 gap-1">
+              <button
+                onClick={() => setChartViewMode('balance')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                  chartViewMode === 'balance'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+                }`}
+              >
+                <BarChart2 className="w-3.5 h-3.5" />
+                产销剪刀差与库存蓄水 (柱线联动)
+              </button>
+              <button
+                onClick={() => setChartViewMode('flow')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                  chartViewMode === 'flow'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+                }`}
+              >
+                <Layers3 className="w-3.5 h-3.5" />
+                单月水池与流向分解
+              </button>
+              <button
+                onClick={() => setChartViewMode('lines')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                  chartViewMode === 'lines'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+                }`}
+              >
+                <LineChart className="w-3.5 h-3.5" />
+                多维全景折线
+              </button>
             </div>
           </div>
 
-          {/* Pure SVG Beautiful Interactive Line Chart */}
-          <div className="relative w-full aspect-[8/3.5] bg-slate-50/50 rounded-2xl p-4 border border-slate-100 overflow-hidden select-none">
+          {/* VIEW MODE 1: BALANCE (Grouped Bars for Production vs Sales + Net Delta Badges + Inventory Line Overlay) */}
+          {chartViewMode === 'balance' && (
+            <div className="space-y-4">
+              
+              {/* Dynamic Live Balance Equation Banner */}
+              <div className="bg-slate-900 text-slate-100 p-3.5 rounded-xl border border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs shadow-inner">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="bg-indigo-600 text-white font-mono font-extrabold text-[10px] px-2.5 py-0.5 rounded-full shadow-sm">
+                    [{selectedMonthData.month}] 动态平衡公式
+                  </span>
+                  <span className="font-bold">
+                    生产入库 <span className="text-emerald-400 font-mono font-extrabold">{selectedMonthData.production}</span> 辆 - 实际销售 <span className="text-blue-400 font-mono font-extrabold">{selectedMonthData.actualSales}</span> 辆 = 
+                    <strong className={selectedMonthData.gap >= 0 ? 'text-emerald-400 font-mono font-extrabold ml-1.5' : 'text-rose-400 font-mono font-extrabold ml-1.5'}>
+                      剪刀差 {selectedMonthData.gap >= 0 ? `+${selectedMonthData.gap}` : selectedMonthData.gap} 辆 ({selectedMonthData.gap >= 0 ? '建库蓄水' : '去库消耗'})
+                    </strong>
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 text-amber-300 font-mono font-bold bg-slate-800 px-3 py-1 rounded-lg border border-slate-700 text-[11px] shrink-0">
+                  期末总库存蓄水: <span className="text-amber-400 text-sm font-extrabold">{selectedMonthData.inventory} 辆</span>
+                </div>
+              </div>
+
+              {/* Grouped Bar + Line Overlay SVG */}
+              <div className="relative w-full aspect-[8/3.5] bg-slate-50/50 rounded-2xl p-4 border border-slate-100 overflow-hidden select-none">
+                <svg 
+                  viewBox={`0 0 ${svgWidth} ${svgHeight}`} 
+                  className="w-full h-full overflow-visible"
+                >
+                  {/* Grid Lines */}
+                  {[0, 0.25, 0.5, 0.75, 1].map((ratio, i) => {
+                    const y = paddingTop + ratio * chartHeight;
+                    const valueLabel = Math.round(maxVal * (1 - ratio));
+                    return (
+                      <g key={i} className="opacity-40">
+                        <line 
+                          x1={paddingLeft} 
+                          y1={y} 
+                          x2={svgWidth - paddingRight} 
+                          y2={y} 
+                          stroke="#cbd5e1" 
+                          strokeWidth="0.75" 
+                          strokeDasharray="4 4" 
+                        />
+                        <text 
+                          x={paddingLeft - 8} 
+                          y={y + 3} 
+                          textAnchor="end" 
+                          className="font-mono text-[9px] fill-slate-400 font-bold"
+                        >
+                          {valueLabel}
+                        </text>
+                      </g>
+                    );
+                  })}
+
+                  {/* Forecast Shading */}
+                  {(() => {
+                    const xCutoff = getXCoordinate(histCutoffIndex, activeData.length);
+                    const xEnd = getXCoordinate(activeData.length - 1, activeData.length);
+                    return (
+                      <g key="forecastRegion">
+                        <rect 
+                          x={xCutoff} 
+                          y={paddingTop} 
+                          width={Math.max(0, xEnd - xCutoff)} 
+                          height={chartHeight} 
+                          fill="rgba(99, 102, 241, 0.04)" 
+                          rx="6"
+                        />
+                        <line 
+                          x1={xCutoff} 
+                          y1={paddingTop - 10} 
+                          x2={xCutoff} 
+                          y2={paddingTop + chartHeight} 
+                          stroke="#6366f1" 
+                          strokeWidth="1.5" 
+                          strokeDasharray="4 4" 
+                        />
+                        <text 
+                          x={xCutoff + 6} 
+                          y={paddingTop - 4} 
+                          className="fill-indigo-600 font-extrabold text-[9px] font-mono"
+                        >
+                          🔮 未来推演 (预测/计划)
+                        </text>
+                      </g>
+                    );
+                  })()}
+
+                  {/* X Axis & Month Grouped Bars */}
+                  {activeData.map((d, idx) => {
+                    const x = getXCoordinate(idx, activeData.length);
+                    const isSelected = selectedIndex === idx;
+                    const isHovered = hoveredIndex === idx;
+
+                    const yProd = getYCoordinate(d.production);
+                    const yAct = getYCoordinate(d.actualSales);
+
+                    const prodBarHeight = Math.max(2, paddingTop + chartHeight - yProd);
+                    const actBarHeight = Math.max(2, paddingTop + chartHeight - yAct);
+
+                    const barWidth = 14;
+
+                    return (
+                      <g 
+                        key={idx}
+                        className="cursor-pointer"
+                        onMouseEnter={() => setHoveredIndex(idx)}
+                        onMouseLeave={() => setHoveredIndex(null)}
+                        onClick={() => setSelectedIndex(idx)}
+                      >
+                        {/* Hover/Selection Background Bar */}
+                        {(isSelected || isHovered) && (
+                          <rect 
+                            x={x - 24} 
+                            y={paddingTop} 
+                            width={48} 
+                            height={chartHeight} 
+                            fill={isSelected ? "rgba(99, 102, 241, 0.08)" : "rgba(148, 163, 184, 0.05)"} 
+                            rx="8"
+                          />
+                        )}
+
+                        {/* Production Bar (Emerald) */}
+                        <rect 
+                          x={x - barWidth - 2} 
+                          y={yProd} 
+                          width={barWidth} 
+                          height={prodBarHeight} 
+                          fill={d.isForecast ? "url(#emeraldGradForecast)" : "#10b981"} 
+                          rx="3"
+                          className="transition-all duration-300 hover:opacity-90"
+                        />
+
+                        {/* Actual Sales Bar (Blue) */}
+                        <rect 
+                          x={x + 2} 
+                          y={yAct} 
+                          width={barWidth} 
+                          height={actBarHeight} 
+                          fill={d.isForecast ? "url(#blueGradForecast)" : "#2563eb"} 
+                          rx="3"
+                          className="transition-all duration-300 hover:opacity-90"
+                        />
+
+                        {/* Net Delta Badge (+/-) above bar pair */}
+                        {(() => {
+                          const minBarY = Math.min(yProd, yAct);
+                          const delta = d.gap;
+                          const isPlus = delta >= 0;
+                          return (
+                            <g transform={`translate(${x}, ${minBarY - 8})`}>
+                              <rect 
+                                x={-18} 
+                                y={-11} 
+                                width={36} 
+                                height={13} 
+                                rx={4} 
+                                fill={isPlus ? "#dcfce7" : "#ffe4e6"} 
+                                stroke={isPlus ? "#86efac" : "#fca5a5"} 
+                                strokeWidth={0.8}
+                              />
+                              <text 
+                                textAnchor="middle" 
+                                y={-2} 
+                                className={`text-[8px] font-mono font-extrabold ${isPlus ? 'fill-emerald-800' : 'fill-rose-800'}`}
+                              >
+                                {isPlus ? `▲+${delta}` : `▼${delta}`}
+                              </text>
+                            </g>
+                          );
+                        })()}
+
+                        {/* X-Axis Label */}
+                        <text 
+                          x={x} 
+                          y={paddingTop + chartHeight + 18} 
+                          textAnchor="middle" 
+                          className={`text-[9px] font-bold ${
+                            isSelected 
+                              ? 'fill-indigo-600 font-extrabold text-[10px]' 
+                              : 'fill-slate-500'
+                          }`}
+                        >
+                          {d.month}
+                        </text>
+                      </g>
+                    );
+                  })}
+
+                  {/* SVG Gradients */}
+                  <defs>
+                    <linearGradient id="emeraldGradForecast" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#34d399" stopOpacity="0.8" />
+                      <stop offset="100%" stopColor="#059669" stopOpacity="0.5" />
+                    </linearGradient>
+                    <linearGradient id="blueGradForecast" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#60a5fa" stopOpacity="0.8" />
+                      <stop offset="100%" stopColor="#1d4ed8" stopOpacity="0.5" />
+                    </linearGradient>
+                  </defs>
+
+                  {/* Total Inventory Line Overlay (Amber Line - Total Stock Water Level) */}
+                  {showInv && (
+                    <>
+                      <path 
+                        d={linePaths.histInv}
+                        fill="none"
+                        stroke="#f59e0b"
+                        strokeWidth="3.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="transition-all duration-300 drop-shadow-sm"
+                      />
+                      <path 
+                        d={linePaths.forecastInv}
+                        fill="none"
+                        stroke="#d97706"
+                        strokeWidth="3.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeDasharray="5 4"
+                        className="transition-all duration-300"
+                      />
+                    </>
+                  )}
+
+                  {/* Safety Stock Line Overlay (Violet Dashed Line) */}
+                  {showSafetyStock && (
+                    <>
+                      <path 
+                        d={linePaths.histSafety}
+                        fill="none"
+                        stroke="#8b5cf6"
+                        strokeWidth="2"
+                        strokeDasharray="4 3"
+                      />
+                      <path 
+                        d={linePaths.forecastSafety}
+                        fill="none"
+                        stroke="#7c3aed"
+                        strokeWidth="2"
+                        strokeDasharray="4 3"
+                      />
+                    </>
+                  )}
+
+                  {/* Nodes on Inventory line */}
+                  {activeData.map((d, idx) => {
+                    const x = getXCoordinate(idx, activeData.length);
+                    const yInv = getYCoordinate(d.inventory);
+                    const isSelected = selectedIndex === idx;
+
+                    return (
+                      <g key={idx} onClick={() => setSelectedIndex(idx)} className="cursor-pointer">
+                        <circle 
+                          cx={x} 
+                          cy={yInv} 
+                          r={isSelected ? 6 : 4.5} 
+                          className="fill-amber-500 stroke-white stroke-[2] shadow"
+                        />
+                        {isSelected && (
+                          <circle 
+                            cx={x} 
+                            cy={yInv} 
+                            r={10} 
+                            className="fill-amber-500/20 stroke-amber-500/50 stroke-[1.5]"
+                          />
+                        )}
+                      </g>
+                    );
+                  })}
+
+                </svg>
+
+                {/* Floating Tooltip */}
+                {hoveredIndex !== null && (
+                  <div 
+                    className="absolute bg-slate-900/95 text-white p-3 rounded-xl shadow-xl text-[10px] space-y-1 z-20 pointer-events-none border border-slate-700/50 backdrop-blur-md"
+                    style={{
+                      left: `${(hoveredIndex / (activeData.length - 1)) * 72 + 8}%`,
+                      top: '10%'
+                    }}
+                  >
+                    <div className="font-bold border-b border-slate-700/60 pb-1 flex justify-between gap-4">
+                      <span>{activeData[hoveredIndex].month} 产销存平衡明细</span>
+                      <span className="text-indigo-300 font-mono">第 {hoveredIndex + 1} 节点</span>
+                    </div>
+                    <div className="space-y-0.5 pt-1 font-mono">
+                      <div className="flex justify-between gap-6">
+                        <span className="text-slate-400">● 生产入库(流入):</span>
+                        <strong className="text-emerald-400">{activeData[hoveredIndex].production} 辆</strong>
+                      </div>
+                      <div className="flex justify-between gap-6">
+                        <span className="text-slate-400">● 实际销售(流出):</span>
+                        <strong className="text-blue-400">{activeData[hoveredIndex].actualSales} 辆</strong>
+                      </div>
+                      <div className="flex justify-between gap-6 border-t border-slate-700/60 pt-1 mt-1">
+                        <span className="text-slate-200 font-bold">● 月度净剪刀差(增减):</span>
+                        <strong className={activeData[hoveredIndex].gap >= 0 ? "text-emerald-400 font-extrabold" : "text-rose-400 font-extrabold"}>
+                          {activeData[hoveredIndex].gap >= 0 ? `+${activeData[hoveredIndex].gap}` : activeData[hoveredIndex].gap} 辆
+                        </strong>
+                      </div>
+                      <div className="flex justify-between gap-6">
+                        <span className="text-slate-400">● 期末总库存(水池水位):</span>
+                        <strong className="text-amber-400">{activeData[hoveredIndex].inventory} 辆</strong>
+                      </div>
+                      <div className="flex justify-between gap-6">
+                        <span className="text-slate-400">● 安全库存目标({safetyStockRatio.toFixed(1)}倍销):</span>
+                        <strong className="text-violet-400">{activeData[hoveredIndex].safetyStock} 辆</strong>
+                      </div>
+                      <div className="flex justify-between gap-6 border-t border-slate-700/60 pt-1">
+                        <span className="text-slate-300 font-bold">● 库存与安全线拟合率:</span>
+                        <strong className={
+                          (activeData[hoveredIndex].inventory / (activeData[hoveredIndex].safetyStock || 1)) >= 0.85 && 
+                          (activeData[hoveredIndex].inventory / (activeData[hoveredIndex].safetyStock || 1)) <= 1.25 
+                            ? "text-emerald-400 font-extrabold" 
+                            : (activeData[hoveredIndex].inventory / (activeData[hoveredIndex].safetyStock || 1)) < 0.85
+                              ? "text-rose-400 font-extrabold"
+                              : "text-amber-400 font-extrabold"
+                        }>
+                          {Math.round((activeData[hoveredIndex].inventory / (activeData[hoveredIndex].safetyStock || 1)) * 100)}%
+                        </strong>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Legend Summary for Balance Mode */}
+              <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs pt-1 border-t border-slate-100">
+                <div className="flex items-center gap-1.5 font-semibold text-slate-700">
+                  <span className="w-3 h-3 rounded bg-emerald-500 inline-block"></span>
+                  <span>1. 生产入库 (Inflow)</span>
+                </div>
+                <div className="flex items-center gap-1.5 font-semibold text-slate-700">
+                  <span className="w-3 h-3 rounded bg-blue-600 inline-block"></span>
+                  <span>2. 实际销售 (Outflow)</span>
+                </div>
+                <div className="flex items-center gap-1.5 font-semibold text-slate-700">
+                  <span className="text-[10px] bg-emerald-100 text-emerald-800 font-mono font-bold px-1.5 py-0.2 rounded border border-emerald-300">▲+剪刀差</span>
+                  <span>3. 净增库 / 净去库</span>
+                </div>
+                <div className="flex items-center gap-1.5 font-semibold text-amber-700">
+                  <span className="w-3 h-1 bg-amber-500 inline-block rounded-full"></span>
+                  <span>4. 期末总库存 (蓄水池)</span>
+                </div>
+                <div className="flex items-center gap-1.5 font-semibold text-violet-700">
+                  <span className="w-3 stroke-violet-600 border-b-2 border-dashed border-violet-600 inline-block"></span>
+                  <span>5. 安全库存线</span>
+                </div>
+              </div>
+
+            </div>
+          )}
+
+          {/* VIEW MODE 2: FLOW (PSI Reservoir & Supply Chain Pipe Breakdown) */}
+          {chartViewMode === 'flow' && (
+            <div className="space-y-4 bg-slate-50/80 p-5 rounded-2xl border border-slate-200/80 animate-fade-in">
+              <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+                <div>
+                  <span className="text-[10px] text-slate-400 uppercase font-extrabold block">单月水池与流量方程分解</span>
+                  <h3 className="text-sm font-extrabold text-slate-900 font-mono">
+                    [{selectedMonthData.month}] 产销存物理账本流向拆解
+                  </h3>
+                </div>
+                <span className="text-xs bg-indigo-100 text-indigo-800 font-bold px-3 py-1 rounded-full border border-indigo-200">
+                  点击下方节点可切换月份
+                </span>
+              </div>
+
+              {/* Physical Flow Visual Blocks */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                
+                {/* Block 1: Inflow Supply */}
+                <div className="bg-white p-4 rounded-xl border border-slate-200/80 space-y-3 shadow-sm">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                    <span className="text-xs font-extrabold text-emerald-700 flex items-center gap-1">
+                      <ArrowDown className="w-3.5 h-3.5 text-emerald-600" />
+                      1. 本期供给源头 (入流)
+                    </span>
+                    <span className="text-[10px] bg-emerald-50 text-emerald-800 font-mono font-bold px-2 py-0.5 rounded">
+                      + 资源供给
+                    </span>
+                  </div>
+                  <div className="space-y-2 font-mono text-xs">
+                    <div className="flex justify-between text-slate-500">
+                      <span>期初库存 (上月结转):</span>
+                      <strong className="text-slate-800">
+                        {selectedIndex === 0 ? 0 : activeData[selectedIndex - 1].inventory} 辆
+                      </strong>
+                    </div>
+                    <div className="flex justify-between text-emerald-600 font-bold">
+                      <span>+ 本期生产入库:</span>
+                      <strong className="text-sm font-extrabold">+{selectedMonthData.production} 辆</strong>
+                    </div>
+                    <div className="border-t border-slate-100 pt-2 flex justify-between font-bold text-slate-900">
+                      <span>= 可售整车总量:</span>
+                      <span className="text-emerald-700 text-sm font-extrabold">
+                        {(selectedIndex === 0 ? 0 : activeData[selectedIndex - 1].inventory) + selectedMonthData.production} 辆
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Block 2: Sales Outflow */}
+                <div className="bg-white p-4 rounded-xl border border-slate-200/80 space-y-3 shadow-sm">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                    <span className="text-xs font-extrabold text-blue-700 flex items-center gap-1">
+                      <ArrowRight className="w-3.5 h-3.5 text-blue-600" />
+                      2. 本期销售消纳 (出流)
+                    </span>
+                    <span className="text-[10px] bg-blue-50 text-blue-800 font-mono font-bold px-2 py-0.5 rounded">
+                      - 销号出库
+                    </span>
+                  </div>
+                  <div className="space-y-2 font-mono text-xs">
+                    <div className="flex justify-between text-slate-500">
+                      <span>直营销售 (直客交车):</span>
+                      <strong className="text-purple-600">{selectedMonthData.directSales} 辆</strong>
+                    </div>
+                    <div className="flex justify-between text-slate-500">
+                      <span>渠道加盟 (经销商提车):</span>
+                      <strong className="text-cyan-600">{selectedMonthData.channelSales} 辆</strong>
+                    </div>
+                    <div className="border-t border-slate-100 pt-2 flex justify-between font-bold text-blue-700">
+                      <span>= 本期实际总销售:</span>
+                      <span className="text-blue-800 text-sm font-extrabold">
+                        -{selectedMonthData.actualSales} 辆
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Block 3: Residual Inventory */}
+                <div className="bg-white p-4 rounded-xl border border-slate-200/80 space-y-3 shadow-sm">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                    <span className="text-xs font-extrabold text-amber-700 flex items-center gap-1">
+                      <Layers className="w-3.5 h-3.5 text-amber-600" />
+                      3. 期末库存留存 (蓄水)
+                    </span>
+                    <span className="text-[10px] bg-amber-50 text-amber-800 font-mono font-bold px-2 py-0.5 rounded">
+                      = 期末留存
+                    </span>
+                  </div>
+                  <div className="space-y-2 font-mono text-xs">
+                    <div className="flex justify-between text-slate-500">
+                      <span>工厂中央总厂库:</span>
+                      <strong className="text-amber-800">{selectedMonthData.factoryStock} 辆</strong>
+                    </div>
+                    <div className="flex justify-between text-slate-500">
+                      <span>全国终端门店店头:</span>
+                      <strong className="text-amber-600">{selectedMonthData.storeStock} 辆</strong>
+                    </div>
+                    <div className="border-t border-slate-100 pt-2 flex justify-between font-bold text-amber-800">
+                      <span>= 期末在库总车数:</span>
+                      <span className="text-amber-600 text-sm font-extrabold">
+                        {selectedMonthData.inventory} 辆
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Month Selector Pills */}
+              <div className="flex flex-wrap items-center justify-center gap-2 pt-2 border-t border-slate-200/60">
+                <span className="text-[10px] text-slate-400 font-bold mr-1">切换查看月份:</span>
+                {activeData.map((d, mIdx) => (
+                  <button
+                    key={mIdx}
+                    onClick={() => setSelectedIndex(mIdx)}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold font-mono transition cursor-pointer ${
+                      selectedIndex === mIdx 
+                        ? 'bg-indigo-600 text-white shadow-sm' 
+                        : 'bg-white hover:bg-slate-200 text-slate-700 border border-slate-200/80'
+                    }`}
+                  >
+                    {d.month}
+                  </button>
+                ))}
+              </div>
+
+            </div>
+          )}
+
+          {/* VIEW MODE 3: LINES (Multi-Series Detailed View) */}
+          {chartViewMode === 'lines' && (
+            <div className="space-y-4">
+              {/* Pure SVG Beautiful Interactive Line Chart */}
+              <div className="relative w-full aspect-[8/3.5] bg-slate-50/50 rounded-2xl p-4 border border-slate-100 overflow-hidden select-none">
             
             <svg 
               viewBox={`0 0 ${svgWidth} ${svgHeight}`} 
@@ -1177,6 +1764,32 @@ export default function VehicleFitting() {
                 </>
               )}
 
+              {/* 7. Safety Stock (安全库存 = 销售预测 * 系数) - Violet/Fuchsia */}
+              {showSafetyStock && (
+                <>
+                  <path 
+                    d={linePaths.histSafety}
+                    fill="none"
+                    stroke="#8b5cf6"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeDasharray="5 3"
+                    className="transition-all duration-300"
+                  />
+                  <path 
+                    d={linePaths.forecastSafety}
+                    fill="none"
+                    stroke="#7c3aed"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeDasharray="5 3"
+                    className="transition-all duration-300"
+                  />
+                </>
+              )}
+
               {/* Interactive Dots */}
               {activeData.map((d, idx) => {
                 const x = getXCoordinate(idx, activeData.length);
@@ -1190,6 +1803,7 @@ export default function VehicleFitting() {
                 const yDirect = getYCoordinate(d.directSales);
                 const yChannel = getYCoordinate(d.channelSales);
                 const yAct = getYCoordinate(d.actualSales);
+                const ySafety = getYCoordinate(d.safetyStock);
 
                 return (
                   <g 
@@ -1277,6 +1891,16 @@ export default function VehicleFitting() {
                         className={`fill-blue-600 stroke-white stroke-[2] shadow-md ${isForecastNode ? 'ring-2 ring-blue-300' : ''}`}
                       />
                     )}
+
+                    {/* Safety Stock dots */}
+                    {showSafetyStock && (
+                      <circle 
+                        cx={x} 
+                        cy={ySafety} 
+                        r={isSelected ? 5.5 : 4} 
+                        className={`fill-violet-600 stroke-white stroke-[1.5] shadow ${isForecastNode ? 'ring-2 ring-violet-300' : ''}`}
+                      />
+                    )}
                   </g>
                 );
               })}
@@ -1333,6 +1957,12 @@ export default function VehicleFitting() {
                     </span>
                     <strong className="text-amber-400">{activeData[hoveredIndex].inventory} 辆</strong>
                   </div>
+                  <div className="flex justify-between gap-6 text-violet-300 font-bold border-t border-slate-800 pt-1">
+                    <span>
+                      ● 安全库存线 (=预测×{safetyStockRatio}):
+                    </span>
+                    <strong className="text-violet-400 font-extrabold">{activeData[hoveredIndex].safetyStock} 辆</strong>
+                  </div>
                 </div>
               </div>
             )}
@@ -1340,7 +1970,7 @@ export default function VehicleFitting() {
           </div>
 
           {/* Legend Selector with Toggles */}
-          <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2 pt-3 border-t border-slate-100 text-xs">
+          <div className="flex flex-wrap items-center justify-center gap-x-2.5 gap-y-2 pt-3 border-t border-slate-100 text-xs">
             
             {/* Legend 1: Production */}
             <button 
@@ -1361,7 +1991,7 @@ export default function VehicleFitting() {
               }`}
             >
               <div className={`w-2.5 h-2.5 rounded-full ${showApply ? 'bg-pink-500' : 'bg-slate-300'}`}></div>
-              <span>2. 直营提报(前6月实线/未来虚线)</span>
+              <span>2. 直营提报</span>
             </button>
 
             {/* Legend 3: Direct Sales */}
@@ -1372,7 +2002,7 @@ export default function VehicleFitting() {
               }`}
             >
               <div className={`w-2.5 h-2.5 rounded-full ${showDem ? 'bg-purple-500' : 'bg-slate-300'}`}></div>
-              <span>3. 直营销售(前6月实线/未来虚线)</span>
+              <span>3. 直营销售</span>
             </button>
 
             {/* Legend 4: Channel Sales */}
@@ -1383,7 +2013,7 @@ export default function VehicleFitting() {
               }`}
             >
               <div className={`w-2.5 h-2.5 rounded-full ${showChannel ? 'bg-cyan-500' : 'bg-slate-300'}`}></div>
-              <span>4. 渠道销售(前6月实线/未来虚线)</span>
+              <span>4. 渠道销售</span>
             </button>
 
             {/* Legend 5: Actual Sales (Direct + Channel) */}
@@ -1394,7 +2024,7 @@ export default function VehicleFitting() {
               }`}
             >
               <div className={`w-2.5 h-2.5 rounded-full ${showAct ? 'bg-blue-600' : 'bg-slate-300'}`}></div>
-              <span>5. 实际销售=直营+渠道(前6月实线/未来虚线)</span>
+              <span>5. 实际销售(直+渠)</span>
             </button>
 
             {/* Legend 6: Inventory */}
@@ -1405,9 +2035,191 @@ export default function VehicleFitting() {
               }`}
             >
               <div className={`w-2.5 h-2.5 rounded-full ${showInv ? 'bg-amber-500' : 'bg-slate-300'}`}></div>
-              <span>6. 总车库存(前6月实线/未来虚线)</span>
+              <span>6. 总车库存</span>
+            </button>
+
+            {/* Legend 7: Safety Stock */}
+            <button 
+              onClick={() => setShowSafetyStock(!showSafetyStock)}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl border transition cursor-pointer font-semibold ${
+                showSafetyStock ? 'bg-violet-50 border-violet-200 text-violet-800 shadow-sm ring-1 ring-violet-300' : 'bg-slate-50 border-slate-200/60 text-slate-400'
+              }`}
+            >
+              <div className={`w-2.5 h-2.5 rounded-full ${showSafetyStock ? 'bg-violet-600' : 'bg-slate-300'}`}></div>
+              <span>7. 安全库存 (=销售预测×{safetyStockRatio})</span>
             </button>
             
+          </div>
+          </div>
+          )}
+
+          {/* Interactive Safety Stock & Sales Forecast Controls Console */}
+          <div className="bg-slate-50 p-4 sm:p-5 rounded-2xl border border-slate-200/80 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/80 pb-3">
+              <div className="flex items-center gap-2">
+                <Sliders className="w-4 h-4 text-violet-600" />
+                <h3 className="text-xs sm:text-sm font-extrabold text-slate-900">
+                  安全库存与销售预测 动态调优控制台
+                </h3>
+              </div>
+              <span className="text-[10px] bg-violet-100 text-violet-800 font-bold px-2.5 py-0.5 rounded-full border border-violet-200">
+                实时计算联动折线图
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              
+              {/* Slider 1: Sales Forecast Multiplier */}
+              <div className="space-y-2 bg-white p-3.5 rounded-xl border border-slate-200/60">
+                <div className="flex justify-between items-center text-xs font-bold">
+                  <span className="text-slate-700">1. 销售预测基准调整 (需求系数)</span>
+                  <span className="text-blue-600 font-mono font-extrabold">
+                    {Math.round(salesForecastMultiplier * 100)}%
+                  </span>
+                </div>
+                <input 
+                  type="range" 
+                  min="0.5" 
+                  max="1.5" 
+                  step="0.05" 
+                  value={salesForecastMultiplier} 
+                  onChange={(e) => setSalesForecastMultiplier(parseFloat(e.target.value))}
+                  className="w-full accent-blue-600 cursor-pointer h-1.5 bg-slate-200 rounded-lg"
+                />
+                <div className="flex justify-between text-[9px] text-slate-400 font-semibold">
+                  <span>50% (保守市场)</span>
+                  <span>100% (基准预测)</span>
+                  <span>150% (旺季爆发)</span>
+                </div>
+              </div>
+
+              {/* Slider 2: Safety Stock Ratio */}
+              <div className="space-y-2 bg-white p-3.5 rounded-xl border border-slate-200/60">
+                <div className="flex justify-between items-center text-xs font-bold">
+                  <span className="text-slate-700">2. 安全库存覆盖倍数 (正常约2倍销售)</span>
+                  <span className="text-violet-600 font-mono font-extrabold">
+                    {safetyStockRatio.toFixed(1)} 倍月销量
+                  </span>
+                </div>
+                <input 
+                  type="range" 
+                  min="0.5" 
+                  max="4.0" 
+                  step="0.1" 
+                  value={safetyStockRatio} 
+                  onChange={(e) => setSafetyStockRatio(parseFloat(e.target.value))}
+                  className="w-full accent-violet-600 cursor-pointer h-1.5 bg-slate-200 rounded-lg"
+                />
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  <span className="text-[9px] text-slate-400 self-center font-semibold mr-1">标准预设:</span>
+                  {[
+                    { label: '1.5倍 (精益压库)', val: 1.5 },
+                    { label: '2.0倍 (标准配额)', val: 2.0 },
+                    { label: '2.5倍 (充沛备库)', val: 2.5 },
+                    { label: '3.0倍 (高缓冲蓄水)', val: 3.0 }
+                  ].map((preset, pIdx) => (
+                    <button 
+                      key={pIdx}
+                      onClick={() => setSafetyStockRatio(preset.val)}
+                      className={`text-[9px] px-2 py-0.5 rounded-md font-bold transition cursor-pointer ${
+                        safetyStockRatio === preset.val 
+                          ? 'bg-violet-600 text-white shadow-sm' 
+                          : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+                      }`}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+            </div>
+
+            {/* Current month & cycle Safety Stock vs Total Inventory Fitting Diagnosis Section */}
+            <div className="bg-white p-4 rounded-xl border border-slate-200/80 space-y-3 shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-indigo-600" />
+                  <span className="text-xs font-extrabold text-slate-900 font-mono">
+                    [{selectedMonthData.month}] 安全库存与总库存 拟合判断与诊断
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 font-mono text-[11px]">
+                  <span className="text-slate-500 font-semibold">全周期匹配拟合度:</span>
+                  <span className="bg-indigo-50 text-indigo-700 font-extrabold px-2 py-0.5 rounded border border-indigo-200">
+                    {fittingAnalysis.avgScore}%
+                  </span>
+                </div>
+              </div>
+
+              {/* Grid of fitting dimension numbers */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono">
+                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                  <span className="text-[10px] text-slate-400 font-sans font-semibold block">1. 当月实际/预测销售</span>
+                  <strong className="text-blue-600 text-sm font-extrabold">{fittingAnalysis.sales} 辆</strong>
+                </div>
+
+                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                  <span className="text-[10px] text-slate-400 font-sans font-semibold block">2. 安全库存目标 ({safetyStockRatio.toFixed(1)}倍)</span>
+                  <strong className="text-violet-600 text-sm font-extrabold">{fittingAnalysis.targetSafety} 辆</strong>
+                </div>
+
+                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                  <span className="text-[10px] text-slate-400 font-sans font-semibold block">3. 实际期末总库存</span>
+                  <strong className="text-amber-600 text-sm font-extrabold">{fittingAnalysis.currentInv} 辆</strong>
+                </div>
+
+                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                  <span className="text-[10px] text-slate-400 font-sans font-semibold block">4. 拟合完成度 (总/安全)</span>
+                  <strong className={`text-sm font-extrabold ${
+                    fittingAnalysis.status === 'ideal' ? 'text-emerald-600' :
+                    fittingAnalysis.status === 'under' ? 'text-rose-600' : 'text-amber-600'
+                  }`}>
+                    {fittingAnalysis.ratio}%
+                  </strong>
+                </div>
+              </div>
+
+              {/* Fitting Diagnosis Result Banner */}
+              <div className={`p-3 rounded-lg border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs font-sans ${
+                fittingAnalysis.status === 'ideal' 
+                  ? 'bg-emerald-50 text-emerald-900 border-emerald-200' 
+                  : fittingAnalysis.status === 'under'
+                    ? 'bg-rose-50 text-rose-900 border-rose-200'
+                    : 'bg-amber-50 text-amber-900 border-amber-200'
+              }`}>
+                <div className="flex items-center gap-2">
+                  {fittingAnalysis.status === 'ideal' ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  ) : fittingAnalysis.status === 'under' ? (
+                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                  )}
+                  <div>
+                    <strong className="font-extrabold block text-xs">
+                      {fittingAnalysis.status === 'ideal' && `🟢 完美拟合：总库存与 ${safetyStockRatio.toFixed(1)}倍月销安全水位高度贴合 (${fittingAnalysis.ratio}%)`}
+                      {fittingAnalysis.status === 'under' && `🟡 存货偏低：总库存未达 ${safetyStockRatio.toFixed(1)}倍安全线，缺口 {-fittingAnalysis.gap} 辆 (拟合率 ${fittingAnalysis.ratio}%)`}
+                      {fittingAnalysis.status === 'over' && `🔴 存货超量：总库存大幅超出 ${safetyStockRatio.toFixed(1)}倍安全线，余量 +${fittingAnalysis.gap} 辆 (拟合率 ${fittingAnalysis.ratio}%)`}
+                    </strong>
+                    <span className="text-[11px] opacity-90 block mt-0.5">
+                      {fittingAnalysis.status === 'ideal' && '产销存处于精益协同区间，既能有效抵御销售波峰断货，又未造成资金沉淀。'}
+                      {fittingAnalysis.status === 'under' && `若出现短期订单爆发，现有库存缓冲不足，极易穿透防线导致大面积交付卡断缺货。建议适当补产，补足 {-fittingAnalysis.gap} 辆缓冲垫。`}
+                      {fittingAnalysis.status === 'over' && `库存积压超过安全基准 +${fittingAnalysis.gap} 辆，占用过多流动资金与堆场，建议控制下月生产排产，拉动渠道提车去库。`}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="shrink-0 font-mono text-[11px] font-bold">
+                  {fittingAnalysis.gap >= 0 ? (
+                    <span className="px-2.5 py-1 bg-white/80 rounded border shadow-sm">安全缓冲: +{fittingAnalysis.gap} 辆</span>
+                  ) : (
+                    <span className="px-2.5 py-1 bg-white/80 rounded border shadow-sm text-rose-700">安全缺口: {fittingAnalysis.gap} 辆</span>
+                  )}
+                </div>
+              </div>
+
+            </div>
           </div>
         </div>
 
@@ -1529,27 +2341,38 @@ export default function VehicleFitting() {
 
           {/* Model Health Checklist */}
           <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/60 space-y-3">
-            <h3 className="text-xs font-extrabold text-slate-900 flex items-center gap-1.5">
-              <Scale className="w-3.5 h-3.5 text-indigo-600" />
-              多维拟合业务评价体系
+            <h3 className="text-xs font-extrabold text-slate-900 flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <Scale className="w-3.5 h-3.5 text-indigo-600" />
+                多维拟合业务评价体系
+              </span>
+              <button
+                onClick={() => setShowCorrelationModal(true)}
+                className="text-[10px] text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-2 py-0.5 rounded-lg font-bold border border-indigo-200 transition cursor-pointer flex items-center gap-1 shadow-sm"
+              >
+                <HelpCircle className="w-3 h-3" />
+                相关性计算说明
+              </button>
             </h3>
             <div className="space-y-2 text-[10px] leading-normal font-medium">
               <div className="flex items-center justify-between pb-2 border-b border-slate-200/30">
-                <span className="text-slate-500">直营需求与生产相关性</span>
+                <div className="flex items-center gap-1">
+                  <span className="text-slate-500">直营需求与生产相关性</span>
+                  <button 
+                    onClick={() => setShowCorrelationModal(true)}
+                    className="text-indigo-600 hover:text-indigo-800 text-[9px] underline font-bold cursor-pointer"
+                  >
+                    (查看算法)
+                  </button>
+                </div>
                 <span className={`font-mono font-bold ${selectedModel === 'v3m8' ? 'text-rose-600' : 'text-emerald-600'}`}>
                   {selectedModel === 'v3m8' ? '极低 (R=0.21)' : '中高 (R=0.74)'}
                 </span>
               </div>
-              <div className="flex items-center justify-between pb-2 border-b border-slate-200/30">
+              <div className="flex items-center justify-between">
                 <span className="text-slate-500">实际零售与排产延迟月数</span>
                 <span className="font-mono font-bold text-slate-800">
                   {selectedModel === 'v3m8' ? '1.5个月 (高度滞后)' : '0.5个月 (敏捷对齐)'}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-slate-500">供应链牛鞭放大系数 (Bullwhip)</span>
-                <span className={`font-mono font-bold ${selectedModel === 'v3m8' ? 'text-rose-600' : 'text-emerald-600'}`}>
-                  {selectedModel === 'v3m8' ? '3.41 (高度失真)' : '1.34 (良性对准)'}
                 </span>
               </div>
             </div>
@@ -1570,7 +2393,7 @@ export default function VehicleFitting() {
               S&OP 产销存提报月度联动
             </div>
             <h2 className="text-base sm:text-lg font-extrabold text-slate-900 flex items-center gap-2 mt-1">
-              {selectedModel === 'v3m8' ? '3米8 微卡' : '多拉大面'} 月度 4维度供求拟合与风险透视
+              {selectedModel === 'v3m8' ? '3米8 微卡' : '多拉大面'} 月度产销存联动与风险透视
             </h2>
             <p className="text-xs text-slate-500">
               深度透视<b>【生产入库、库存、直营申请/提报、实际销量】</b>多变量耦合关系，直观穿透每月核心经营状态。
@@ -2531,6 +3354,135 @@ export default function VehicleFitting() {
                   className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-4 rounded-xl transition duration-150 text-xs sm:text-sm shadow-lg shadow-indigo-600/20 active:scale-[0.98] cursor-pointer"
                 >
                   我知道了，返回报表
+                </button>
+              </div>
+
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ========================================================
+          CORRELATION ALGORITHM EXPLANATION MODAL
+          ======================================================== */}
+      <AnimatePresence>
+        {showCorrelationModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="bg-slate-900 border border-slate-700/80 rounded-2xl max-w-2xl w-full p-6 text-slate-100 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto"
+            >
+              {/* Modal Header */}
+              <div className="flex justify-between items-start border-b border-slate-800 pb-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="p-1.5 bg-indigo-500/20 text-indigo-400 rounded-lg">
+                      <Scale className="w-4 h-4" />
+                    </span>
+                    <h2 className="text-base font-extrabold text-white">
+                      「直营需求与生产相关性」计算原理与数学公式说明
+                    </h2>
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    采用统计学【皮尔逊积矩相关系数 (Pearson Correlation Coefficient)】精准量化前端需求提报与后端排产的同步协同度
+                  </p>
+                </div>
+                <button 
+                  onClick={() => setShowCorrelationModal(false)}
+                  className="text-slate-400 hover:text-white p-1.5 hover:bg-slate-800 rounded-lg transition cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Formula & Explanation Card */}
+              <div className="space-y-4 text-xs">
+                
+                {/* 1. Formula */}
+                <div className="bg-slate-950 p-4 rounded-xl border border-indigo-900/40 space-y-2">
+                  <span className="text-[11px] font-bold text-indigo-400 uppercase tracking-wider block">
+                    一、数学公式 (Pearson Correlation R)
+                  </span>
+                  <div className="p-3 bg-slate-900/80 rounded-lg font-mono text-indigo-200 text-center text-xs sm:text-sm border border-slate-800 font-extrabold">
+                    R = Σ(X<sub>i</sub> - X̄)(Y<sub>i</sub> - Ȳ) / √[ Σ(X<sub>i</sub> - X̄)<sup>2</sup> · Σ(Y<sub>i</sub> - Ȳ)<sup>2</sup> ]
+                  </div>
+                  <ul className="text-[11px] text-slate-300 space-y-1 pl-2 font-mono">
+                    <li>• <strong className="text-pink-400">X<sub>i</sub></strong> = 第 i 月的【直营需求提报量】 (Direct Demand Apply)</li>
+                    <li>• <strong className="text-emerald-400">Y<sub>i</sub></strong> = 第 i 月的【工厂实际生产入库量】 (Production)</li>
+                    <li>• <strong className="text-indigo-300">X̄, Ȳ</strong> = 观察期内 X 与 Y 的算术平均值 (Mean)</li>
+                    <li>• <strong className="text-amber-300">R 取值范围</strong> = [-1.0, +1.0]，正值越大代表“排产越能实时跟进直营提报”</li>
+                  </ul>
+                </div>
+
+                {/* 2. Real Model Case Calculation */}
+                <div className="space-y-2">
+                  <span className="text-[11px] font-bold text-slate-300 uppercase tracking-wider block">
+                    二、本报表中两款车型实测计算分解
+                  </span>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    
+                    {/* Case 1: 多拉大面 */}
+                    <div className="bg-slate-950 p-3.5 rounded-xl border border-emerald-900/40 space-y-2">
+                      <div className="flex justify-between items-center border-b border-slate-800 pb-1.5">
+                        <span className="font-extrabold text-emerald-400">多拉大面 (R = +0.74)</span>
+                        <span className="bg-emerald-500/20 text-emerald-300 text-[10px] font-bold px-2 py-0.5 rounded">
+                          强相关 (敏捷联动)
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-300 leading-relaxed">
+                        1-6月直营需求与生产入库曲线几乎<strong>同频起伏</strong>。1月高提报配高排产，2月春节避峰同低，3-6月同步爬坡。协方差显著为正，说明供应链对直营需求反应敏捷，产销协同度极高。
+                      </p>
+                    </div>
+
+                    {/* Case 2: 3米8微卡 */}
+                    <div className="bg-slate-950 p-3.5 rounded-xl border border-rose-900/40 space-y-2">
+                      <div className="flex justify-between items-center border-b border-slate-800 pb-1.5">
+                        <span className="font-extrabold text-rose-400">3米8微卡 (R = +0.21)</span>
+                        <span className="bg-rose-500/20 text-rose-300 text-[10px] font-bold px-2 py-0.5 rounded">
+                          弱相关 (滞后失真)
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-300 leading-relaxed">
+                        4月直营爆单 (480辆) 时工厂生产断档 (63辆) 造成欠交；5月直营需求回落 (220辆) 时工厂却滞后爆产 (1,436辆) 补偿压库。出现 <strong>1~1.5 个月的错位相位差</strong>，导致相关系数骤降至 0.21。
+                      </p>
+                    </div>
+
+                  </div>
+                </div>
+
+                {/* 3. Decision Standards */}
+                <div className="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800 space-y-1.5">
+                  <span className="text-[11px] font-bold text-slate-300 block">
+                    三、车企 S&OP 业务评价标准
+                  </span>
+                  <div className="grid grid-cols-3 gap-2 text-[10px] font-mono text-center">
+                    <div className="bg-emerald-950/40 border border-emerald-800/40 p-2 rounded-lg">
+                      <strong className="text-emerald-400 block font-bold">R ≥ 0.70</strong>
+                      <span className="text-slate-300">强协同·敏捷拉动</span>
+                    </div>
+                    <div className="bg-amber-950/40 border border-amber-800/40 p-2 rounded-lg">
+                      <strong className="text-amber-400 block font-bold">0.30 ≤ R &lt; 0.70</strong>
+                      <span className="text-slate-300">中度协同·轻微滞后</span>
+                    </div>
+                    <div className="bg-rose-950/40 border border-rose-800/40 p-2 rounded-lg">
+                      <strong className="text-rose-400 block font-bold">R &lt; 0.30</strong>
+                      <span className="text-slate-300">严重脱节·高风险</span>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Close Button */}
+              <div className="pt-2">
+                <button 
+                  onClick={() => setShowCorrelationModal(false)}
+                  className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 px-4 rounded-xl transition text-xs shadow-lg shadow-indigo-600/20 cursor-pointer"
+                >
+                  关闭说明，返回数据看板
                 </button>
               </div>
 

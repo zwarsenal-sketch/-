@@ -4,25 +4,29 @@
  */
 
 import React, { useState } from 'react';
+import PitchDeck from './components/PitchDeck';
 import ScenarioSimulator from './components/ScenarioSimulator';
 import ProcurementApprovalPlugin from './components/ProcurementApprovalPlugin';
 import VehicleInventoryManager from './components/VehicleInventoryManager';
 import PartsInventoryManager from './components/PartsInventoryManager';
 import FittingAnalysis from './components/FittingAnalysis';
 import VehicleFitting from './components/VehicleFitting';
+import LifecycleInventoryDemo from './components/LifecycleInventoryDemo';
 import { 
   PlayCircle, 
   Briefcase,
   Car,
   Package,
   LineChart,
-  ShieldCheck
+  ShieldCheck,
+  Presentation,
+  Layers
 } from 'lucide-react';
 
-type TabType = 'scenario' | 'procurementPlugin' | 'vehicleStock' | 'partsStock' | 'fitting' | 'vehicleFitting';
+type TabType = 'pitchDeck' | 'procurementPlugin' | 'scenario' | 'vehicleStock' | 'partsStock' | 'fitting' | 'vehicleFitting' | 'lifecycleDemo';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<TabType>('procurementPlugin');
+  const [activeTab, setActiveTab] = useState<TabType>('lifecycleDemo');
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans antialiased">
@@ -49,6 +53,17 @@ export default function App() {
 
           {/* Navigation tab bar */}
           <nav className="flex flex-wrap bg-slate-100/80 p-1 rounded-xl border border-slate-200/50 gap-1">
+            <button 
+              onClick={() => setActiveTab('pitchDeck')}
+              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all duration-200 cursor-pointer ${
+                activeTab === 'pitchDeck' 
+                  ? 'bg-amber-500 text-slate-950 shadow-sm font-extrabold' 
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Presentation className="w-3.5 h-3.5" />
+              0. 立项汇报 (新)
+            </button>
             <button 
               onClick={() => setActiveTab('procurementPlugin')}
               className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all duration-200 cursor-pointer ${
@@ -113,7 +128,18 @@ export default function App() {
               }`}
             >
               <LineChart className="w-3.5 h-3.5 text-emerald-500" />
-              6. 车型拟合诊断 (新)
+              6. 车型拟合诊断
+            </button>
+            <button 
+              onClick={() => setActiveTab('lifecycleDemo')}
+              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all duration-200 cursor-pointer ${
+                activeTab === 'lifecycleDemo' 
+                  ? 'bg-emerald-600 text-white shadow-sm font-bold' 
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              7. 全生命周期进销存 (Demo)
             </button>
           </nav>
         </div>
@@ -123,12 +149,14 @@ export default function App() {
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 pb-16 space-y-8">
         
         {/* Render Tab Contents */}
+        {activeTab === 'pitchDeck' && <PitchDeck />}
         {activeTab === 'procurementPlugin' && <ProcurementApprovalPlugin />}
         {activeTab === 'scenario' && <ScenarioSimulator />}
         {activeTab === 'vehicleStock' && <VehicleInventoryManager />}
         {activeTab === 'partsStock' && <PartsInventoryManager />}
         {activeTab === 'fitting' && <FittingAnalysis />}
         {activeTab === 'vehicleFitting' && <VehicleFitting />}
+        {activeTab === 'lifecycleDemo' && <LifecycleInventoryDemo />}
 
       </main>
     </div>

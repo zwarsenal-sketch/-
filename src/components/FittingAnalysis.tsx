@@ -97,14 +97,14 @@ const baselineData: Record<string, { name: string; price: number; initialStock: 
   }
 };
 
-// User uploaded real historical data for Jan - Jun 2026
+// User uploaded real historical data for Jan - Jun 2026 (多拉大面)
 const realHistoricalData = [
-  { month: '1月', production: 1338, factoryStock: 1677, storeStock: 918, directApply: 817, sales: 796 },
-  { month: '2月', production: 339, factoryStock: 2265, storeStock: 18, directApply: 10, sales: 260 },
-  { month: '3月', production: 2073, factoryStock: 2583, storeStock: 493, directApply: 678, sales: 1988 },
-  { month: '4月', production: 3302, factoryStock: 2548, storeStock: 935, directApply: 1192, sales: 1778 },
-  { month: '5月', production: 4042, factoryStock: 3875, storeStock: 1160, directApply: 1041, sales: 1611 },
-  { month: '6月', production: 3215, factoryStock: 4975, storeStock: 785, directApply: 1805, sales: 2495 }
+  { month: '1月', production: 1338, factoryStock: 741, storeStock: 918, directApply: 817, directSales: 180, channelSales: 796, sales: 976 },
+  { month: '2月', production: 339, factoryStock: 401, storeStock: 18, directApply: 10, directSales: 134, channelSales: 260, sales: 394 },
+  { month: '3月', production: 2047, factoryStock: 442, storeStock: 488, directApply: 451, directSales: 1063, channelSales: 1975, sales: 3038 },
+  { month: '4月', production: 2520, factoryStock: 612, storeStock: 848, directApply: 891, directSales: 833, channelSales: 873, sales: 1706 },
+  { month: '5月', production: 2641, factoryStock: 1103, storeStock: 786, directApply: 804, directSales: 834, channelSales: 1043, sales: 1877 },
+  { month: '6月', production: 2580, factoryStock: 1679, storeStock: 708, directApply: 1597, directSales: 1094, channelSales: 2247, sales: 3341 }
 ];
 
 export default function FittingAnalysis() {
@@ -136,12 +136,13 @@ export default function FittingAnalysis() {
   // Active selected risk card to highlight elements in the graph
   const [activeRiskHighlight, setActiveRiskHighlight] = useState<string | null>(null);
   
-  // Legend filters for macro graph
+  // Legend filters for macro graph (production, sales, and total vehicle stock default ON; others default GREYED OUT)
   const [showProduction, setShowProduction] = useState<boolean>(true);
   const [showSales, setShowSales] = useState<boolean>(true);
-  const [showFactoryStock, setShowFactoryStock] = useState<boolean>(true);
-  const [showStoreStock, setShowStoreStock] = useState<boolean>(true);
-  const [showDirectApply, setShowDirectApply] = useState<boolean>(true);
+  const [showTotalStock, setShowTotalStock] = useState<boolean>(true);
+  const [showFactoryStock, setShowFactoryStock] = useState<boolean>(false);
+  const [showStoreStock, setShowStoreStock] = useState<boolean>(false);
+  const [showDirectApply, setShowDirectApply] = useState<boolean>(false);
 
   const [hoveredMonthIdx, setHoveredMonthIdx] = useState<number | null>(null);
 
@@ -245,12 +246,17 @@ export default function FittingAnalysis() {
         directApply = Math.round(sales * 0.8);
       }
 
+      const directSales = Math.round(sales * 0.35);
+      const channelSales = Math.round(sales * 0.65);
+
       fullTimeline.push({
         month: m,
         production,
         factoryStock: currentFactoryStock,
         storeStock: currentStoreStock,
         directApply,
+        directSales,
+        channelSales,
         sales,
         isFuture: true
       });
@@ -964,7 +970,17 @@ export default function FittingAnalysis() {
                   }`}
                 >
                   <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
-                  销售订单 (需求) {showSales ? <Eye className="w-3 h-3 ml-0.5 text-indigo-600" /> : <EyeOff className="w-3 h-3 ml-0.5" />}
+                  实际销量 (总销售) {showSales ? <Eye className="w-3 h-3 ml-0.5 text-indigo-600" /> : <EyeOff className="w-3 h-3 ml-0.5" />}
+                </button>
+
+                <button
+                  onClick={() => setShowTotalStock(!showTotalStock)}
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-lg border transition-all duration-200 cursor-pointer ${
+                    showTotalStock ? 'bg-white border-sky-200 text-sky-800 shadow-sm' : 'border-transparent text-slate-400 bg-slate-100/40 line-through'
+                  }`}
+                >
+                  <span className="w-2 h-2 rounded-full bg-sky-500"></span>
+                  总车库存 (=生产+厂库+店库) {showTotalStock ? <Eye className="w-3 h-3 ml-0.5 text-sky-600" /> : <EyeOff className="w-3 h-3 ml-0.5" />}
                 </button>
 
                 <button
@@ -1085,7 +1101,18 @@ export default function FittingAnalysis() {
                       />
                     )}
 
-                    {/* 3. Factory Inventory Line (Amber) */}
+                    {/* 3. Total Vehicle Stock Line (= Production + FactoryStock + StoreStock) (Sky Blue) */}
+                    {showTotalStock && (
+                      <path 
+                        d={computedMacroMonths.map((m, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(m.production + m.factoryStock + m.storeStock)}`).join(' ')} 
+                        fill="none" 
+                        stroke="#0284c7" 
+                        strokeWidth="3" 
+                        strokeLinecap="round" 
+                      />
+                    )}
+
+                    {/* 4. Factory Inventory Line (Amber) */}
                     {showFactoryStock && (
                       <path 
                         d={computedMacroMonths.map((m, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(m.factoryStock)}`).join(' ')} 
@@ -1142,6 +1169,7 @@ export default function FittingAnalysis() {
                           {/* Dots */}
                           {showProduction && <circle cx={x} cy={getY(m.production)} r={isHovered ? "5" : "3"} fill="#10b981" stroke="#020617" strokeWidth="1.5" />}
                           {showSales && <circle cx={x} cy={getY(m.sales)} r={isHovered ? "5" : "3"} fill="#6366f1" stroke="#020617" strokeWidth="1.5" />}
+                          {showTotalStock && <circle cx={x} cy={getY(m.production + m.factoryStock + m.storeStock)} r={isHovered ? "6" : "4"} fill="#0284c7" stroke="#020617" strokeWidth="1.5" />}
                           {showFactoryStock && <circle cx={x} cy={getY(m.factoryStock)} r={isHovered ? "6" : "4"} fill="#f59e0b" stroke="#020617" strokeWidth="1.5" />}
                           {showStoreStock && <circle cx={x} cy={getY(m.storeStock)} r={isHovered ? "5" : "3"} fill="#2dd4bf" stroke="#020617" strokeWidth="1.5" />}
                           {showDirectApply && <circle cx={x} cy={getY(m.directApply)} r={isHovered ? "4" : "2"} fill="#a855f7" stroke="#020617" strokeWidth="1" />}
