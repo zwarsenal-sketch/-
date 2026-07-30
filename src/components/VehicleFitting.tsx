@@ -31,6 +31,7 @@ import {
   CheckCircle,
   ShieldCheck,
   Scale,
+  Activity,
   X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -2383,6 +2384,197 @@ export default function VehicleFitting() {
       </div>
 
 
+
+      {/* DEDICATED FOCUS SECTION: DUAL-DIMENSION CORE SUPPLY CHAIN RELATIONSHIP ANALYSIS */}
+      <div className="bg-slate-900 text-slate-100 rounded-3xl p-6 sm:p-8 border border-slate-800 shadow-xl space-y-6 relative overflow-hidden animate-fade-in">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div className="absolute bottom-0 left-0 w-80 h-80 bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
+
+        {/* Section Header */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-5 relative">
+          <div className="space-y-1">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 text-[10px] font-extrabold border border-indigo-500/30">
+              <Sparkles className="w-3.5 h-3.5 text-indigo-400 animate-pulse" />
+              核心供需数理关系重点透视
+            </div>
+            <h2 className="text-lg sm:text-xl font-extrabold text-white flex items-center gap-2 mt-1">
+              双维度核心关系剖析：生产与销售 & 总库存与安全库存
+            </h2>
+            <p className="text-xs text-slate-400">
+              基于真实账本数据与物理机制，深度拆解<b>「流量端（生产入库 vs 实际销售）」</b>与<b>「存量端（总车库存 vs 安全防线）」</b>的耦合演进。
+            </p>
+          </div>
+          
+          <div className="flex items-center gap-3 bg-slate-800/90 p-2.5 rounded-xl border border-slate-700/80 font-mono text-xs shrink-0 shadow-inner">
+            <div className="flex items-center gap-1.5">
+              <span className="text-slate-400">车型:</span>
+              <strong className="text-indigo-400 font-extrabold">{selectedModel === 'v3m8' ? '3米8 微卡' : '多拉大面'}</strong>
+            </div>
+            <span className="text-slate-600">|</span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-slate-400">安全倍数:</span>
+              <strong className="text-violet-400 font-extrabold">{safetyStockRatio.toFixed(1)}倍月销</strong>
+            </div>
+          </div>
+        </div>
+
+        {/* Dual Dimension Analysis Cards Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 relative">
+          
+          {/* Dimension 1: Production vs Actual Sales (Inflow vs Outflow & Scissors Gap) */}
+          <div className="bg-slate-800/60 p-5 sm:p-6 rounded-2xl border border-slate-700/80 space-y-4 flex flex-col justify-between">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-700/80 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <span className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shadow-sm">
+                    <TrendingUp className="w-4 h-4" />
+                  </span>
+                  <div>
+                    <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider block">关系 1：流量剪刀差</span>
+                    <h3 className="text-sm font-extrabold text-white font-mono">生产入库 (Inflow) vs 实际销售 (Outflow)</h3>
+                  </div>
+                </div>
+                <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-mono font-bold px-2.5 py-1 rounded-full border border-emerald-500/30">
+                  流量与差额方程
+                </span>
+              </div>
+
+              {/* Formula & Live Numbers */}
+              <div className="bg-slate-900/90 p-3.5 rounded-xl border border-slate-700/60 space-y-2">
+                <div className="flex justify-between items-center text-[11px] font-mono border-b border-slate-800 pb-1.5">
+                  <span className="text-slate-400">核心演进公式:</span>
+                  <strong className="text-emerald-400 font-extrabold">Δ (月剪刀差) = 生产入库 - 实际销售</strong>
+                </div>
+                <div className="text-[11px] font-mono space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">选中节点 [{selectedMonthData.month}] 生产入库:</span>
+                    <span className="text-emerald-400 font-extrabold">{selectedMonthData.production} 辆</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">选中节点 [{selectedMonthData.month}] 实际销售:</span>
+                    <span className="text-blue-400 font-extrabold">{selectedMonthData.actualSales} 辆</span>
+                  </div>
+                  <div className="flex justify-between pt-1 border-t border-slate-800 font-bold">
+                    <span className="text-white">月度净剪刀差 (流入 - 流出):</span>
+                    <span className={selectedMonthData.gap >= 0 ? "text-emerald-400 font-extrabold" : "text-rose-400 font-extrabold"}>
+                      {selectedMonthData.gap >= 0 ? `+${selectedMonthData.gap}` : selectedMonthData.gap} 辆 ({selectedMonthData.gap >= 0 ? '建库蓄水' : '去库消耗'})
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Mechanism Explanation */}
+              <div className="space-y-2 text-xs">
+                <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <Info className="w-3.5 h-3.5 text-indigo-400" />
+                  三态数理物理运作机制:
+                </h4>
+                <ul className="space-y-2 text-[11px] text-slate-300">
+                  <li className="bg-slate-900/50 p-2.5 rounded-lg border border-slate-800/80">
+                    <strong className="text-emerald-400 block mb-0.5">1. 正向剪刀差 (供大于求，建库蓄水):</strong>
+                    当生产入库速度大于终端消化速度时，差额车辆注入库存水池。适度正差可为未来销售高峰建立缓冲；若持续大幅正差（如3米8在5月产生 +634 辆剪刀差）将直接诱发暴库与资金沉淀。
+                  </li>
+                  <li className="bg-slate-900/50 p-2.5 rounded-lg border border-slate-800/80">
+                    <strong className="text-rose-400 block mb-0.5">2. 负向剪刀差 (供不应求，去库消耗):</strong>
+                    当终端销号速度高于工厂交车速度时，直接抽取前期累积的存量（如多拉大面在6月产生 -1,264 辆负剪刀差）。若缺乏充足库存衬垫，负差将瞬间穿透防线导致脱销失单。
+                  </li>
+                  <li className="bg-slate-900/50 p-2.5 rounded-lg border border-slate-800/80">
+                    <strong className="text-indigo-300 block mb-0.5">3. 产销率动态评估:</strong>
+                    当前车型全周期平均产销率为 <span className="font-mono font-bold text-white">{selectedModel === 'v3m8' ? '85.4% (严重供过于求)' : '102.6% (精准契合)'}</span>。产销率越接近 100%，供应链计划越敏捷。
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            {/* Bottom Insight Badge */}
+            <div className="p-3 rounded-xl bg-indigo-950/80 border border-indigo-800/60 text-[11px] text-indigo-200 mt-2 font-medium">
+              💡 <b>实证判断:</b> {selectedModel === 'v3m8' ? '3米8微卡呈现典型“滞后爆产”特征，4月爆卖后5月盲目爆产，形成+634辆剧烈剪刀差，将库存冲高4倍。' : '多拉大面在前5个月通过微小正剪刀差平稳构建1,800+辆蓄水池，为6月-1,264辆大负剪刀差提供了完美缓冲。'}
+            </div>
+          </div>
+
+          {/* Dimension 2: Total Vehicle Inventory vs Dynamic Safety Stock */}
+          <div className="bg-slate-800/60 p-5 sm:p-6 rounded-2xl border border-slate-700/80 space-y-4 flex flex-col justify-between">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-700/80 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <span className="p-2.5 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20 shadow-sm">
+                    <ShieldCheck className="w-4 h-4" />
+                  </span>
+                  <div>
+                    <span className="text-[10px] text-amber-400 font-bold uppercase tracking-wider block">关系 2：存量防御拟合</span>
+                    <h3 className="text-sm font-extrabold text-white font-mono">总车库存 (Reservoir) vs 安全库存 (Safety Line)</h3>
+                  </div>
+                </div>
+                <span className="text-[10px] bg-amber-500/20 text-amber-300 font-mono font-bold px-2.5 py-1 rounded-full border border-amber-500/30">
+                  防线匹配拟合度
+                </span>
+              </div>
+
+              {/* Formula & Live Numbers */}
+              <div className="bg-slate-900/90 p-3.5 rounded-xl border border-slate-700/60 space-y-2">
+                <div className="flex justify-between items-center text-[11px] font-mono border-b border-slate-800 pb-1.5">
+                  <span className="text-slate-400">安全防线与拟合度公式:</span>
+                  <strong className="text-amber-400 font-extrabold">安全库存 = 月销售预测 × {safetyStockRatio.toFixed(1)}倍</strong>
+                </div>
+                <div className="text-[11px] font-mono space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">选中节点 [{selectedMonthData.month}] 实际/预测月销:</span>
+                    <span className="text-blue-400 font-extrabold">{fittingAnalysis.sales} 辆</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">计算所得动态安全底线 ({safetyStockRatio.toFixed(1)}倍):</span>
+                    <span className="text-violet-400 font-extrabold">{fittingAnalysis.targetSafety} 辆</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">当月期末实际总车库存:</span>
+                    <span className="text-amber-400 font-extrabold">{fittingAnalysis.currentInv} 辆</span>
+                  </div>
+                  <div className="flex justify-between pt-1 border-t border-slate-800 font-bold">
+                    <span className="text-white">当月总库存/安全线拟合率:</span>
+                    <span className={
+                      fittingAnalysis.status === 'ideal' ? 'text-emerald-400 font-extrabold' :
+                      fittingAnalysis.status === 'under' ? 'text-rose-400 font-extrabold' : 'text-amber-400 font-extrabold'
+                    }>
+                      {fittingAnalysis.ratio}% ({
+                        fittingAnalysis.status === 'ideal' ? '🟢 精益完美拟合' :
+                        fittingAnalysis.status === 'under' ? '🟡 防线被穿透 (低于安全线)' : '🔴 大幅超量 (高于安全线)'
+                      })
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Fitting Diagnosis Explanation */}
+              <div className="space-y-2 text-xs">
+                <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <Activity className="w-3.5 h-3.5 text-amber-400" />
+                  拟合评价与防线监控诊断:
+                </h4>
+                <ul className="space-y-2 text-[11px] text-slate-300">
+                  <li className="bg-slate-900/50 p-2.5 rounded-lg border border-slate-800/80">
+                    <strong className="text-emerald-400 block mb-0.5">🟢 理想拟合区间 (85% ~ 125%):</strong>
+                    实际总库存紧密围绕安全防线（{safetyStockRatio.toFixed(1)}倍月销）波动，代表既拥有防范大单爆发的缓冲垫，又避免了资金呆滞。全周期全景平均拟合得分：<span className="font-mono font-extrabold text-indigo-300">{fittingAnalysis.avgScore}%</span>。
+                  </li>
+                  <li className="bg-slate-900/50 p-2.5 rounded-lg border border-slate-800/80">
+                    <strong className="text-rose-400 block mb-0.5">🟡 缺口穿透预警 (&lt; 85%):</strong>
+                    若总库存低于安全线（如3米8在4月库存137辆，仅为2398辆安全底线的 5.7%），防线失效。短期订单突增将瞬间导致无车可交、客户流失。
+                  </li>
+                  <li className="bg-slate-900/50 p-2.5 rounded-lg border border-slate-800/80">
+                    <strong className="text-amber-400 block mb-0.5">🔴 超量积压风险 (&gt; 125%):</strong>
+                    若总库存大幅超过安全线（如3米8在5月高达545辆），形成堆场积压堰塞湖。需限制下月生产排产，拉动渠道提车去库。
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            {/* Bottom Insight Badge */}
+            <div className="p-3 rounded-xl bg-amber-950/80 border border-amber-800/60 text-[11px] text-amber-200 mt-2 font-medium">
+              🛡️ <b>拟合建议:</b> {fittingAnalysis.status === 'ideal' ? `当前 [${selectedMonthData.month}] 处于精益协同区间，库存结构与 ${safetyStockRatio.toFixed(1)}倍安全防线高度相符。` : fittingAnalysis.status === 'under' ? `当前 [${selectedMonthData.month}] 存在 ${Math.abs(fittingAnalysis.gap)} 辆安全缺口，建议安排工厂适当补排产。` : `当前 [${selectedMonthData.month}] 存在 ${fittingAnalysis.gap} 辆库存超量积压，建议削减下月排产并启动渠道提车。`}
+            </div>
+          </div>
+
+        </div>
+      </div>
 
       {/* Section: Monthly S&OP Risk & Fitting Panorama (User requested: 基于生产、库存、提报、销量的关系，分析每个月的风险和情况，异常数据高亮显示) */}
       <div className="bg-slate-50 rounded-3xl p-6 sm:p-8 border border-slate-200/60 shadow-sm space-y-6 animate-fade-in">

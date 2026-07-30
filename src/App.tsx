@@ -12,6 +12,7 @@ import PartsInventoryManager from './components/PartsInventoryManager';
 import FittingAnalysis from './components/FittingAnalysis';
 import VehicleFitting from './components/VehicleFitting';
 import LifecycleInventoryDemo from './components/LifecycleInventoryDemo';
+import DailySupplyChainFlow from './components/DailySupplyChainFlow';
 import { 
   PlayCircle, 
   Briefcase,
@@ -20,13 +21,14 @@ import {
   LineChart,
   ShieldCheck,
   Presentation,
-  Layers
+  Layers,
+  Activity
 } from 'lucide-react';
 
-type TabType = 'pitchDeck' | 'procurementPlugin' | 'scenario' | 'vehicleStock' | 'partsStock' | 'fitting' | 'vehicleFitting' | 'lifecycleDemo';
+type TabType = 'pitchDeck' | 'procurementPlugin' | 'scenario' | 'vehicleStock' | 'partsStock' | 'fitting' | 'vehicleFitting' | 'lifecycleDemo' | 'dailyFlow';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<TabType>('lifecycleDemo');
+  const [activeTab, setActiveTab] = useState<TabType>('dailyFlow');
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans antialiased">
@@ -139,7 +141,18 @@ export default function App() {
               }`}
             >
               <Layers className="w-3.5 h-3.5" />
-              7. 全生命周期进销存 (Demo)
+              7. 全生命周期进销存
+            </button>
+            <button 
+              onClick={() => setActiveTab('dailyFlow')}
+              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all duration-200 cursor-pointer ${
+                activeTab === 'dailyFlow' 
+                  ? 'bg-indigo-600 text-white shadow-sm font-extrabold' 
+                  : 'text-indigo-600 hover:bg-indigo-50 font-bold'
+              }`}
+            >
+              <Activity className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+              8. 日度流速与可用天数 (新)
             </button>
           </nav>
         </div>
@@ -157,6 +170,7 @@ export default function App() {
         {activeTab === 'fitting' && <FittingAnalysis />}
         {activeTab === 'vehicleFitting' && <VehicleFitting />}
         {activeTab === 'lifecycleDemo' && <LifecycleInventoryDemo />}
+        {activeTab === 'dailyFlow' && <DailySupplyChainFlow />}
 
       </main>
     </div>
